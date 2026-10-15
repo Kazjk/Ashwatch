@@ -1,0 +1,36 @@
+{
+  "name": "ashwatch",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "workspaces": [
+    "apps/server",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev apps/web",
+    "build": "next build apps/web",
+    "start": "next start apps/web",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.43",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/three": "^0.186.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.6",
+    "typescript": "5.9.3"
+  }
+}

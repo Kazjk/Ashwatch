@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ashwatch · small-screen layout check</title>
+<script>
+// Local diagnostic surface only: nothing is uploaded or added to the game protocol.
+const diagnostics=[];
+function recordError(scope,event){
+ diagnostics.push({scope,message:event.message,file:event.filename||"unattributed",line:event.lineno,column:event.colno,stack:event.error?.stack||"unavailable"});
+ if(diagnostics.length>8)diagnostics.shift();
+ const panel=document.getElementById("layout-diagnostics");if(panel)panel.textContent=JSON.stringify(diagnostics,null,2);
+}
+window.addEventListener("error",event=>recordError("harness",event));
+function observeFrame(frame){frame.contentWindow.addEventListener("error",event=>recordError("game frame",event));}
+</script>
+<style>
+body{margin:0;padding:22px;background:#102730;color:#dfddcc;font:14px Arial,sans-serif}h1{font:26px Georgia;margin:0 0 10px}p{font-size:12px;line-height:1.6;max-width:620px}iframe{display:block;width:390px;height:844px;border:1px solid #b99a61;background:#102730}a{color:#ebcb8a}
+</style>
+<h1>Ashwatch · phone-sized layout</h1>
+<p>The game below runs in a 390 × 844 CSS viewport. This checks responsive layout and pointer controls; it does not emulate a physical phone, touch hardware, or a mobile browser.</p>
+<p><a href="/ashwatch">Open the game normally →</a></p>
+<iframe src="/ashwatch/layout-frame" title="Ashwatch 390 by 844 viewport" onload="observeFrame(this)"></iframe>
+<details><summary>Local browser diagnostics</summary><pre id="layout-diagnostics">No captured window errors.</pre></details>
+</html>

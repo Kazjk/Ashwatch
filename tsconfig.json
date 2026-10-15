@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "plugins": [{ "name": "next" }],
+    "paths": {
+      "@ashwatch/content": ["./packages/content/src/index.ts"],
+      "@ashwatch/protocol": ["./packages/protocol/src/index.ts"],
+      "@ashwatch/simulation": ["./packages/simulation/src/index.ts"],
+      "@ashwatch/server": ["./apps/server/src/index.ts"]
+    }
+  },
+  "include": [
+    "apps/**/*.ts",
+    "apps/**/*.tsx",
+    "packages/**/*.ts",
+    "tests/**/*.ts",
+    "apps/web/.next/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

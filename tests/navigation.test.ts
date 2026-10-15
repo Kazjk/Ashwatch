@@ -1,0 +1,24 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {routeTo,TUTORIAL_STEPS,nextTutorialStep} from "../apps/web/app/ashwatch/navigation.ts";
+import {buildingEntrance,buildingContains,TOWNS,canSee,sight} from "../apps/web/app/ashwatch/world.ts";
+test("guidance routes around rendered houses from both lodges to guild entrances",()=>{for(const town of TOWNS){const from=buildingEntrance(town.inn),to=buildingEntrance(town.guild),route=routeTo(from,to);assert.ok(route.length>2);assert.deepEqual(route.at(-1),to);for(const point of route)assert.ok(!buildingContains(point));}});
+test("initial view reveals forward flanks and distant threats remain hidden behind",()=>{const p={x:1000,y:1000,facing:0,awareness:0};assert.ok(canSee(p,{x:1300,y:1200}));assert.ok(canSee(p,{x:1400,y:1000}));assert.ok(!canSee(p,{x:999,y:1000}));assert.ok(!canSee({...p,awareness:100},{x:900,y:1150}));assert.equal(sight(100).range,600);});
+test("tutorial provides touch and keyboard guidance and introduces blind spots before combat",()=>{assert.match(TUTORIAL_STEPS[0].desktop,/W A S D/);assert.doesNotMatch(TUTORIAL_STEPS[0].phone,/W A S D/);assert.match(TUTORIAL_STEPS[2].desktop,/Q \/ R/);assert.match(TUTORIAL_STEPS[2].phone,/Turn left/);});
+test("tutorial requires deliberate actions and completes only after contract, hunt, reward and rest",()=>{
+ const anchor={x:0,y:0,facing:Math.PI-.1,attackAt:100,dodgeAt:100};const hero={...anchor,mission:0,missionKills:0};
+ assert.equal(nextTutorialStep(0,anchor,{...hero,x:46}),1);
+ assert.equal(nextTutorialStep(1,anchor,hero),1);
+ assert.equal(nextTutorialStep(1,anchor,{...hero,dodgeAt:101}),2);
+ assert.equal(nextTutorialStep(2,anchor,{...hero,facing:-Math.PI+.1}),2);
+ assert.equal(nextTutorialStep(2,anchor,{...hero,facing:hero.facing-1}),3);
+ assert.equal(nextTutorialStep(3,anchor,hero),3);
+ assert.equal(nextTutorialStep(3,anchor,{...hero,attackAt:101}),4);
+ assert.equal(nextTutorialStep(4,anchor,{...hero,mission:1}),5);
+ assert.equal(nextTutorialStep(5,anchor,{...hero,missionKills:2}),5);
+ assert.equal(nextTutorialStep(5,anchor,{...hero,missionKills:3}),6);
+ assert.equal(nextTutorialStep(6,anchor,{...hero,mission:2}),7);
+ assert.equal(nextTutorialStep(7,anchor,hero),7);
+ assert.equal(nextTutorialStep(7,anchor,hero,true),TUTORIAL_STEPS.length);
+ assert.equal(nextTutorialStep(TUTORIAL_STEPS.length,anchor,hero,true),TUTORIAL_STEPS.length);
+});
