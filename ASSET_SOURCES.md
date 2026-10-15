@@ -18,3 +18,5 @@ No art, recordings, models, characters, maps or interface assets were imported f
 - Facing Watch: original rear timber entrance/masonry/firs/ridges/supply cart dressing in watch-scenery.ts, articulated Ashen scouts in watch-enemies.ts, actual-frost material tint and code-built defeat ash/debris in scene3d.ts. No additional downloaded image, model, recording or competitor asset. Old ground-warning shapes are removed from current combat presentation.
 
 - Grounded Watch: original opaque fir branch fans and courtyard-edge grass geometry, travel-driven/grounded articulated gait, frost sheen and compact teammate text in the existing code-built art. Class procedural windup/contact voices are original oscillators/envelopes. No new downloaded image, model, recording, font or competitor asset.
+
+- Public playtest: original five cape crests (blade, frost star, anvil, twin daggers and branching leaf) are authored as batched geometry in watch-adventurer.ts. Matching original interface glyphs are SVG paths in game.tsx. The restrained confirmed-hit recoil is code animation; no new downloaded asset or audio sample.

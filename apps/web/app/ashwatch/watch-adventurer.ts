@@ -75,8 +75,21 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  const cloakHeight=rogue?.57:caster?1.12:.90,cloakWidth=tank?.76:rogue?.41:.6;
  const capeGeo=new THREE.PlaneGeometry(cloakWidth,cloakHeight,6,8),pos=capeGeo.attributes.position,rest=new Float32Array(pos.array);
  const capeMaterial=cloth.clone();capeMaterial.roughness=.95;capeMaterial.side=THREE.DoubleSide;materials.push(capeMaterial);const cape=mesh(body,capeGeo,capeMaterial,rogue?-.08:0,1.51-cloakHeight/2,.20);
- mesh(body,new THREE.TorusGeometry(.115,.013,4,16),gold,0,1.27,.32);
- const emblem=mesh(body,new THREE.OctahedronGeometry(.06,0),caster?light:gold,0,1.27,.335);emblem.scale.set(1,1.4,.3);
+ // Large original cape crests identify the five roles from the following camera.
+ // They share the existing body surface batch, so no draw call is added.
+ const crest=(points:[number,number][],x=0,y=0)=>plate(body,gold,points,.015,x,1.27+y,.335);
+ if(cls==="Knight"){
+  crest([[-.025,.17],[.025,.17],[.025,-.07],[0,-.18],[-.025,-.07]]);box(body,gold,0,1.33,.35,.21,.025,.015);
+ }else if(mage){
+  crest([[0,.18],[.04,.06],[.14,.12],[.08,0],[.14,-.12],[.04,-.06],[0,-.18],[-.04,-.06],[-.14,-.12],[-.08,0],[-.14,.12],[-.04,.06]]);
+ }else if(tank){
+  crest([[-.16,.13],[.16,.13],[.12,.025],[.055,-.02],[.055,-.10],[.12,-.14],[-.12,-.14],[-.055,-.10],[-.055,-.02],[-.12,.025]]);
+ }else if(rogue){
+  for(const side of [-1,1]){const blade=crest([[-.024,.12],[.024,.12],[.02,-.07],[0,-.18],[-.02,-.07]],side*.055);blade.rotation.z=side*-.30;box(body,gold,side*.055,1.33,.35,.10,.018,.015);}
+ }else{
+  box(body,gold,0,1.27,.35,.022,.33,.015);
+  for(const side of [-1,1])crest([[0,-.035],[side*.10,.01],[side*.145,.13],[side*.035,.10]],0,side===1?.035:-.035);
+ }
  box(body,clothLight,0,1.54,.045,.4,.08,.27).rotation.x=.1;
  // Batch each pivot by surface so bronze, plate and cloth keep distinct light response.
  const surfaces={metal:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.3,metalness:.62}),cloth:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.94,map:weave}),matte:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78})};materials.push(...Object.values(surfaces));

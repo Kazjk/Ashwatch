@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import {COMBAT} from '../apps/web/app/ashwatch/combat.ts';
 import {distance,strikeRadius} from '../apps/web/app/ashwatch/world.ts';
+import {worldRequest} from '../apps/web/app/ashwatch/world-request.ts';
 const base=process.env.ASHWATCH_URL??'http://127.0.0.1:3011';
-async function request(body,expected=200){const r=await fetch(base+'/api/world',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});assert.equal(r.status,expected);return r.json();}
+const responseTimes=[];let transientRetries=0;
+async function request(body,expected=200){
+ const transport=async(payload,signal)=>{const began=performance.now();const response=await fetch(base+'/api/world',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal});responseTimes.push(performance.now()-began);return response;};
+ if(expected!==200){const r=await transport(body,AbortSignal.timeout(4000));assert.equal(r.status,expected);return r.json();}
+ return worldRequest(body,transport,AbortSignal.timeout(4000),()=>{transientRetries++;console.log(JSON.stringify({event:'transient-response-retried',action:body.action}));});
+}
 const host=await request({action:'enter',roomMode:'create',adventureKind:'watch',oath:'lantern',name:'Watch verifier',heroClass:'Knight'});
 const coverCheck=process.argv.includes('--cover');
 const ally=await request({action:'enter',roomMode:'join',room:host.room,name:'Support verifier',heroClass:coverCheck?'Rogue':'Warden'});
@@ -19,7 +25,8 @@ for(let step=0;step<2000;step++){
    const result={result:'passed',seconds:(Date.now()-began)/1000,watch:v.watch,phases:[...phases],players:sessions.length};
    const replay=await request({action:'restart',...host,oath:'ember'});assert.equal(replay.watch.state,'forming');assert.equal(replay.watch.oath,'ember');await request({action:'resume',...ally});
    const fresh=await request({action:'snapshot',...host});assert.equal(fresh.watch.stage,0);assert.ok(fresh.heroes.find(p=>p.id===host.id));
-   console.log(JSON.stringify({...result,replay:'passed: Ember oath, same company and credentials'},null,2));process.exit(0);
+   const sorted=responseTimes.toSorted((a,b)=>a-b),network={requests:sorted.length,medianResponseMs:Math.round(sorted[Math.floor(sorted.length*.5)]),p95ResponseMs:Math.round(sorted[Math.floor(sorted.length*.95)]),transientRetries};
+   console.log(JSON.stringify({...result,network,replay:'passed: Ember oath, same company and credentials'},null,2));process.exit(0);
   }
   if(p.hp<=0)continue;
   const target=v.monsters.toSorted((a,b)=>distance(p,a)-distance(p,b))[0];let x=0,y=0,facing=p.facing;

@@ -6,6 +6,8 @@ import {readTarget} from "./targeting";
 import {combatFraming,combatCameraSide} from "./camera-framing";
 import {watchEnemy} from "./watch-enemies";
 import {enemyHealth} from "./enemy-health";
+import {hitRecoil} from "./hit-reaction";
+import {clickedFacing,type ClickTarget} from "./click-target";
 import type {ClassName} from "./progression";
 import {adventurer,PHYSIQUE} from "./watch-adventurer";
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
@@ -57,6 +59,7 @@ export class Scene {
  private rim=new THREE.DirectionalLight("#9bbcf0",.95);
  private ambient:THREE.HemisphereLight;
  private ray=new THREE.Raycaster();
+ private clickTargets:ClickTarget[]=[];
  private guideTarget:{x:number;y:number}|null=null;
  private guidePath:{x:number;y:number}[]=[];private guideAt=0;
  setGuide(point:{x:number;y:number}|null){if(JSON.stringify(point)!==JSON.stringify(this.guideTarget)){this.guideTarget=point;this.guideAt=0;}}
@@ -79,8 +82,10 @@ export class Scene {
  getHeading(){return this.heading;}
  aimAt(clientX:number,clientY:number,canvas:HTMLCanvasElement){
   const r=canvas.getBoundingClientRect();this.ray.setFromCamera(new THREE.Vector2((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1),this.camera);
+  const bodyFacing=clickedFacing(this.ray,this.clickTargets,{x:this.playerPosition.x/S,y:this.playerPosition.y/S},[this.environment]);
+  if(bodyFacing!==undefined)return bodyFacing;
   const hit=new THREE.Vector3();if(!this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,1,0),this.watchScene?-.18:0),hit))return undefined;
-  return Math.atan2(hit.z-this.focus.z,hit.x-this.focus.x);
+  return Math.atan2(hit.z-this.playerPosition.y,hit.x-this.playerPosition.x);
  }
  private texture(kind:string){
   const existing=this.textures.get(kind);if(existing)return existing;
@@ -431,7 +436,7 @@ if(actor.animate)actor.animate(now/1000,p.moving?actor.group.userData.motion??0:
 
 
    if(actor.group.userData.hp!==undefined&&m.hp<actor.group.userData.hp)actor.group.userData.hit=now;actor.group.userData.hp=m.hp;
-   actor.group.rotation.z=!this.reducedMotion&&now-(actor.group.userData.hit??0)<180?.16*Math.sin(now*.06):0;
+   actor.group.rotation.z=hitRecoil(now,actor.group.userData.hit,this.reducedMotion);
    let bar=actor.group.getObjectByName("health");
    if(!bar){
     bar=new THREE.Group();bar.name="health";
@@ -446,6 +451,8 @@ if(actor.animate)actor.animate(now/1000,p.moving?actor.group.userData.motion??0:
   }
   if(view?.dragon&&view.dragon.state!=="defeated"){const d=view.dragon,actor=this.actors.get("dragon")??this.dragon();visible.add("dragon");this.updateActor("dragon",actor,d.x,d.y,d.facing,dt);const sleep=d.state==="sleeping";actor.group.scale.y=1.25*(sleep?.78+Math.sin(now*.0015)*.012:1);actor.arm.rotation.x=sleep?.35+Math.sin(now*.0015)*.012:Math.sin(now*.002)*.08;actor.left.rotation.z=(sleep?-.12:.14)+Math.sin(now*(sleep?.001:.005))*.08;actor.right.rotation.z=-actor.left.rotation.z;actor.left.rotation.y=sleep?-1.1:0;actor.right.rotation.y=-actor.left.rotation.y;const tail=actor.group.getObjectByName("tail");if(tail)tail.rotation.y=Math.sin(now*.001)*.14;}
   for(const [id,actor] of this.actors){actor.group.visible=visible.has(id);if(actor.group.visible)actor.group.userData.lastVisible=now;else if(now-(actor.group.userData.lastVisible??now)>60000){actor.group.removeFromParent();if(actor.dispose)actor.dispose();else actor.group.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});this.actors.delete(id);}}
+  this.clickTargets=[];
+  if(me&&view)for(const actor of [...view.heroes,...view.monsters]){const rendered=this.actors.get(actor.id);if(actor.id!==me.id&&actor.hp>0&&rendered?.group.visible)this.clickTargets.push({group:rendered.group,x:actor.x,y:actor.y});}
   // Retain each combat effect for its lifetime instead of reallocating meshes every frame.
   for(const [id,group] of this.effectActors)if(!view?.effects.some(e=>e.id===id&&serverTime-e.at<650)){
    group.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();(o.material as THREE.Material).dispose();}});
