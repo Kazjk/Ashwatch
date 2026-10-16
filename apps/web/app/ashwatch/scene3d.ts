@@ -14,14 +14,14 @@ import {enemyHealth} from "./enemy-health";
 import {hitRecoil} from "./hit-reaction";
 import {clickedFacing,type ClickTarget} from "./click-target";
 import type {ClassName} from "./progression";
-import {adventurer,PHYSIQUE} from "./watch-adventurer";
+import {adventurer,characterPhysique,PHYSIQUE} from "./watch-adventurer";
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
 import {routeTo} from "./navigation";
 import {cameraRig,cameraClearance,damping,followFacing,DEFAULTS,type Preferences,type Box} from "./controls";
 import { residents, TOWNS, BUILDINGS, FLOOR_COLORS, GATE, NEST, VILLAGE, sight, type Hero, type WorldView, type MonsterView } from "./world";
 const S=.04;
 const random=(n:number)=>{const r=Math.sin(n*127.1+311.7)*43758.5453;return r-Math.floor(r);};
-type Actor={group:THREE.Group;left:THREE.Group;right:THREE.Group;arm:THREE.Group;cape?:THREE.Mesh;setFrost?:(active:boolean,seconds:number)=>void;animate?:(t:number,movement:number,attack:number,dash:number,reduced:boolean,action?:CombatAction|null,serverTime?:number)=>void;dispose?:()=>void};
+type Actor={group:THREE.Group;left:THREE.Group;right:THREE.Group;arm:THREE.Group;cape?:THREE.Mesh;setFrost?:(active:boolean,seconds:number)=>void;animate?:(t:number,movement:number,attack:number,dash:number,reduced:boolean,action?:CombatAction|null,serverTime?:number,travelAngle?:number)=>void;dispose?:()=>void};
 export class Scene {
  private renderer:THREE.WebGLRenderer;
  private frontierMode=false;private frontierRenderer:FrontierRenderer|null=null;private frontierModels:FrontierModels|null=null;private buildPlan:{piece:StructureKind;rotation:number}|null=null;private disposed=false;
@@ -141,12 +141,12 @@ export class Scene {
  }
  private makeHouse(x:number,z:number,size:number,seed:number){
   const group=new THREE.Group();group.position.set(x*S,0,z*S);group.scale.setScalar(size);group.userData.house=true;this.environment.add(group);this.decorations.push(group);
-  const stone=this.material("#b6c5bc","stone"),wood=this.material("#60545b","wood"),wall=this.material("#e4ceb0","plaster"),roof=this.material("#3b5260","roof"),dark=this.material("#322c27");
+  const stone=this.material(this.frontierMode?"#85877b":"#b6c5bc","stone"),wood=this.material(this.frontierMode?"#514538":"#60545b","wood"),wall=this.material(this.frontierMode?"#b5ab95":"#e4ceb0","plaster"),roof=this.material(this.frontierMode?"#535b58":"#3b5260","roof"),dark=this.material("#322c27");
   this.box(group,stone,0,.45,0,4.6,.9,2.9);this.box(group,wall,0,1.6,0,4.5,2.2,2.8);
   for(const xx of [-2.2,-.7,.7,2.2])this.box(group,wood,xx,1.8,1.45,.13,2.6,.15);
   for(const yy of [1,2.8])this.box(group,wood,0,yy,1.48,4.6,.16,.16);
-  for(const side of [-1,1]){const r=this.box(group,roof,0,3.35,side*.91,5.2,.16,2.35);r.rotation.x=side*.65;}
-  const triangle=new THREE.Shape();triangle.moveTo(-1.4,0);triangle.lineTo(0,1.05);triangle.lineTo(1.4,0);triangle.closePath();
+  for(const side of [-1,1]){const r=this.box(group,roof,0,3.3,side*.825,5.2,.16,2.04);r.rotation.x=side*.629;}
+  const triangle=new THREE.Shape();triangle.moveTo(-1.65,0);triangle.lineTo(0,1.2);triangle.lineTo(1.65,0);triangle.closePath();
   for(const side of [-1,1]){const m=this.mesh(new THREE.ShapeGeometry(triangle),wall,group,side*2.25,2.7,0);m.rotation.y=side*Math.PI/2;}
   this.box(group,dark,0,1,1.52,.85,1.75,.08);
   for(let i=0;i<5;i++)this.box(group,wood,-.37+i*.185,1,1.58,.025,1.7,.015);
@@ -377,8 +377,8 @@ export class Scene {
  }
  private updateActor(id:string,actor:Actor,x:number,z:number,facing:number,dt:number,responsive=false){
   const target=new THREE.Vector3(x*S,this.heightAt(x,z),z*S),beforeX=actor.group.position.x,beforeZ=actor.group.position.z;
-  if(!actor.group.userData.placed||actor.group.position.distanceTo(target)>6){actor.group.position.copy(target);actor.group.userData.placed=true;actor.group.userData.motion=0;}
-  else{actor.group.position.lerp(target,damping(responsive?24:15,dt));actor.group.userData.motion=Math.min(1,Math.hypot(actor.group.position.x-beforeX,actor.group.position.z-beforeZ)/Math.max(.001,dt*155*S));}
+  if(!actor.group.userData.placed||actor.group.position.distanceTo(target)>6){actor.group.position.copy(target);actor.group.userData.placed=true;actor.group.userData.motion=0;actor.group.userData.travelAngle=0;}
+  else{actor.group.position.lerp(target,damping(responsive?24:15,dt));actor.group.userData.motion=Math.min(1,Math.hypot(actor.group.position.x-beforeX,actor.group.position.z-beforeZ)/Math.max(.001,dt*155*S));if(actor.group.userData.motion>.03)actor.group.userData.travelAngle=Math.atan2(actor.group.position.z-beforeZ,actor.group.position.x-beforeX)-facing;}
   const rotation=-facing-Math.PI/2;const delta=Math.atan2(Math.sin(rotation-actor.group.rotation.y),Math.cos(rotation-actor.group.rotation.y));actor.group.rotation.y+=delta*damping(responsive?24:12,dt);this.actors.set(id,actor);
  }
  draw(canvas:HTMLCanvasElement,view:WorldView|null,now:number,preview=false){
@@ -397,10 +397,10 @@ export class Scene {
    const vision=sight(me.awareness);this.uniforms.active.value=1;this.uniforms.direction.value=me.facing;this.uniforms.range.value=vision.range*S;this.uniforms.angle.value=vision.halfAngle;this.uniforms.rear.value=vision.rearRange*S;
    this.playerPosition.set(me.x*S,me.y*S);this.heading=followFacing(this.heading,me.facing,this.preferences.response,dt);
    const target=new THREE.Vector3(me.x*S,surfaceY,me.y*S);if(this.focus.distanceTo(target)>7)this.focus.copy(target);else this.focus.lerp(target,1-Math.exp(-dt*9));
-   const forward=new THREE.Vector3(Math.cos(this.heading),0,Math.sin(this.heading)),rig=cameraRig(me.awareness,this.preferences.distance);
+   const forward=new THREE.Vector3(Math.cos(this.heading),0,Math.sin(this.heading)),rig=cameraRig(me.awareness,this.preferences.distance,this.frontierMode);
    const pivot=this.focus.clone().add(new THREE.Vector3(0,rig.targetHeight,0));
    const right=new THREE.Vector3(-forward.z,0,forward.x);
-   const faced=readTarget(view!,me),framing=combatFraming(PHYSIQUE[me.heroClass],faced&&!faced.obstructed?Math.hypot(faced.x-me.x,faced.y-me.y)*S:undefined,w<600);
+   const faced=readTarget(view!,me),framing=combatFraming(characterPhysique(me.heroClass,this.frontierMode),faced&&!faced.obstructed?Math.hypot(faced.x-me.x,faced.y-me.y)*S:undefined,w<600);
    const shoulderSide=combatCameraSide(me.heroClass);
    if(this.framedHero!==me.id){this.framedHero=me.id;this.combatLift=framing.lift;this.shoulder=framing.shoulder*shoulderSide;}
    const response=damping(this.reducedMotion?3:5,dt);this.combatLift+=(framing.lift-this.combatLift)*response;this.shoulder+=(framing.shoulder*shoulderSide-this.shoulder)*response;
@@ -444,8 +444,8 @@ export class Scene {
    actor.arm.rotation.z=swing?(p.attackStyle===2?-swing*1.1:(p.attackStyle===0?1:-1)*swing*1.35):0;
    const roll=(serverTime-p.dodgeAt)/360;actor.group.rotation.x=!this.reducedMotion&&roll>=0&&roll<1?-.25*Math.sin(roll*Math.PI):0;
    actor.group.position.y=this.heightAt(p.x,p.y)+(!this.reducedMotion&&roll>=0&&roll<1?.12*Math.sin(roll*Math.PI):0);
-if(me&&p.id!==me.id&&me.party&&p.party===me.party){let label=actor.group.getObjectByName("company-label");if(!label){label=new THREE.Group();label.name="company-label";label.position.y=PHYSIQUE[p.heroClass].height*2.15;actor.group.add(label);const c=document.createElement("canvas");c.width=256;c.height=80;const ctx=c.getContext("2d")!;ctx.textAlign="center";ctx.strokeStyle="#10232b";ctx.lineWidth=5;ctx.lineJoin="round";ctx.font="25px Arial";ctx.strokeText(p.name,128,33,240);ctx.fillStyle="#efe3bd";ctx.fillText(p.name,128,33,240);ctx.font="17px Arial";ctx.strokeText(p.heroClass,128,59,240);ctx.fillStyle="#a8cabe";ctx.fillText(p.heroClass,128,59,240);const texture=new THREE.CanvasTexture(c),material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const sprite=new THREE.Sprite(material);sprite.scale.set(1.5,.47,1);label.add(sprite);const barMaterial=new THREE.MeshBasicMaterial({color:"#9ad6bd",depthTest:false});const bar=new THREE.Mesh(new THREE.PlaneGeometry(1.35,.035),barMaterial);bar.name="company-health";bar.position.y=-.29;label.add(bar);const oldDispose=actor.dispose;actor.dispose=()=>{oldDispose?.();texture.dispose();material.dispose();bar.geometry.dispose();barMaterial.dispose();};}label.quaternion.copy(this.camera.quaternion).premultiply(actor.group.quaternion.clone().invert());const fill=label.getObjectByName("company-health")!;fill.scale.x=Math.max(.001,p.hp/p.maxHp);fill.position.x=(fill.scale.x-1)*.675;}
-if(actor.animate)actor.animate(now/1000,p.moving?actor.group.userData.motion??0:0,0,roll>=0&&roll<1?Math.sin(roll*Math.PI):0,this.reducedMotion,p.action,serverTime);else if(actor.cape)actor.cape.rotation.x=.12+Math.sin(now*.005)*.06+(p.moving?.25:0);actor.group.rotation.z=p.hp<=0?1.4:0;}
+if(me&&p.id!==me.id&&me.party&&p.party===me.party){let label=actor.group.getObjectByName("company-label");if(!label){label=new THREE.Group();label.name="company-label";label.position.y=characterPhysique(p.heroClass,this.frontierMode).height*2.15;actor.group.add(label);const c=document.createElement("canvas");c.width=256;c.height=80;const ctx=c.getContext("2d")!;ctx.textAlign="center";ctx.strokeStyle="#10232b";ctx.lineWidth=5;ctx.lineJoin="round";ctx.font="25px Arial";ctx.strokeText(p.name,128,33,240);ctx.fillStyle="#efe3bd";ctx.fillText(p.name,128,33,240);ctx.font="17px Arial";ctx.strokeText(p.heroClass,128,59,240);ctx.fillStyle="#a8cabe";ctx.fillText(p.heroClass,128,59,240);const texture=new THREE.CanvasTexture(c),material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false});const sprite=new THREE.Sprite(material);sprite.scale.set(1.5,.47,1);label.add(sprite);const barMaterial=new THREE.MeshBasicMaterial({color:"#9ad6bd",depthTest:false});const bar=new THREE.Mesh(new THREE.PlaneGeometry(1.35,.035),barMaterial);bar.name="company-health";bar.position.y=-.29;label.add(bar);const oldDispose=actor.dispose;actor.dispose=()=>{oldDispose?.();texture.dispose();material.dispose();bar.geometry.dispose();barMaterial.dispose();};}label.quaternion.copy(this.camera.quaternion).premultiply(actor.group.quaternion.clone().invert());const fill=label.getObjectByName("company-health")!;fill.scale.x=Math.max(.001,p.hp/p.maxHp);fill.position.x=(fill.scale.x-1)*.675;}
+if(actor.animate)actor.animate(now/1000,p.moving?actor.group.userData.motion??0:0,0,roll>=0&&roll<1?Math.sin(roll*Math.PI):0,this.reducedMotion,p.action,serverTime,this.frontierMode?actor.group.userData.travelAngle??0:0);else if(actor.cape)actor.cape.rotation.x=.12+Math.sin(now*.005)*.06+(p.moving?.25:0);actor.group.rotation.z=p.hp<=0?1.4:0;}
   for(const m of view?.monsters??[]){const training=view?.watch?.state==="forming";let actor=this.actors.get(m.id);if(actor&&!!actor.group.userData.training!==training){actor.group.removeFromParent();if(actor.dispose)actor.dispose();else actor.group.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});this.actors.delete(m.id);actor=undefined;}actor??=this.creature(m);actor.group.userData.training=training;visible.add(m.id);this.updateActor(m.id,actor,m.x,m.y,m.facing,dt);actor.group.position.y=this.heightAt(m.x,m.y)+(this.reducedMotion?0:Math.sin(now*.008+m.id.length)*.015);
    const anticipation=m.attackAt>serverTime?Math.max(0,Math.min(1,1-(m.attackAt-serverTime)/(m.kind==="boss"?1400:1050))):0;
    const recovery=m.recoveryUntil>serverTime;actor.setFrost?.((m.slowUntil??0)>serverTime,dt);

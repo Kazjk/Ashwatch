@@ -11,3 +11,5 @@
 
 /* Unaffordable recipes remain readable: costs explain the next useful action. */
 .aw .frontier-recipes button:disabled{opacity:1;background:#172d2b;border-color:#61766a;color:#d9dfd0;cursor:not-allowed}.aw .frontier-recipes button:disabled small{color:#c9d4cb}.aw .frontier-recipes button:disabled span{color:#d3bc85}
+
+.frontier-run{display:none}@media(max-width:760px){.frontier-run{display:block;position:absolute;left:16px;bottom:196px;min-width:62px;min-height:44px;border:1px solid #c4ad7c;background:#223d36ed;color:#e8dfc8;font:12px Arial}.frontier-run[aria-pressed=true]{background:#bda168;color:#172d24}}

@@ -6,14 +6,15 @@ import type {ClassName} from "./progression.ts";
 type Appearance={frontier?:boolean;weapon?:string;hair?:string;accessory?:string;faction?:"ashen"};
 export {PHYSIQUE} from "./adventurer.ts";
 import {PHYSIQUE} from "./adventurer.ts";
+import {FRONTIER_PHYSIQUE} from "./frontier-physique.ts";
+export const characterPhysique=(cls:ClassName,frontier=false)=>frontier?FRONTIER_PHYSIQUE[cls]:PHYSIQUE[cls];
 
 // Original articulated meshes. The design favours a readable outline over tiny surface detail.
 export function adventurer(cls:ClassName,appearance:Appearance={},preview=false){
  const group=new THREE.Group(),body=new THREE.Group();group.add(body);
- const physique=PHYSIQUE[cls];body.scale.set(physique.width,physique.height,physique.depth);
+ const grounded=!!appearance.frontier,physique=characterPhysique(cls,grounded);body.scale.set(physique.width,physique.height,physique.depth);
  const geometries:THREE.BufferGeometry[]=[],materials:THREE.Material[]=[],pivots:THREE.Group[]=[body];
  const tank=cls==="Ironbound",rogue=cls==="Rogue",mage=cls==="Spellweaver",warden=cls==="Warden",caster=mage||warden,armored=tank||cls==="Knight";
- const grounded=!!appearance.frontier;
  const ashen=appearance.faction==="ashen";
  const mat=(color:string,glow=false)=>{const m=new THREE.MeshStandardMaterial({color,roughness:.82,metalness:0,flatShading:!grounded,...(glow?{emissive:color,emissiveIntensity:.65}:{})});materials.push(m);return m;};
  const ink=mat(ashen?"#271f29":"#152936"),cloth=mat(ashen?"#713b43":{Knight:"#9f3948",Spellweaver:"#244b78",Ironbound:"#2c424f",Rogue:"#4f3664",Warden:"#236651"}[cls]);
@@ -23,10 +24,10 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  const weaveCanvas=document.createElement("canvas");weaveCanvas.width=weaveCanvas.height=64;const weaveContext=weaveCanvas.getContext("2d")!;weaveContext.fillStyle="#e1e1e1";weaveContext.fillRect(0,0,64,64);for(let i=0;i<64;i++){weaveContext.fillStyle=i%2?"#cacaca":"#ededed";weaveContext.fillRect(i,0,1,64);weaveContext.fillStyle="rgba(50,50,50,.10)";weaveContext.fillRect(0,i,64,1);}const weave=new THREE.CanvasTexture(weaveCanvas);weave.wrapS=weave.wrapT=THREE.RepeatWrapping;weave.repeat.set(4,4);weave.colorSpace=THREE.SRGBColorSpace;
  steel.metalness=grounded?.82:.62;steel.roughness=grounded?.45:.29;gold.metalness=.68;gold.roughness=.34;cloth.map=weave;clothLight.map=weave;if(grounded){steel.roughnessMap=weave;cloth.roughnessMap=weave;cloth.roughness=.98;clothLight.roughness=.98;}
  function mesh(p:THREE.Object3D,g:THREE.BufferGeometry,m:THREE.Material,x=0,y=0,z=0){geometries.push(g);const a=new THREE.Mesh(g,m);a.position.set(x,y,z);a.castShadow=true;a.receiveShadow=true;p.add(a);return a;}
- function box(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){return mesh(p,new RoundedBoxGeometry(w,h,d,1,Math.min(.025,w/6,h/6,d/6)),m,x,y,z);}
- function oval(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){const a=mesh(p,new THREE.SphereGeometry(1,14,10),m,x,y,z);a.scale.set(w,h,d);return a;}
- function taper(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,top:number,bottom:number,h:number,depth=1){const a=mesh(p,new THREE.CylinderGeometry(top,bottom,h,10),m,x,y,z);a.scale.z=depth;return a;}
- function plate(p:THREE.Object3D,m:THREE.Material,points:[number,number][],depth:number,x=0,y=0,z=0){const shape=new THREE.Shape(points.map(v=>new THREE.Vector2(...v)));return mesh(p,new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSize:.008,bevelThickness:.008,bevelSegments:1,steps:1}),m,x,y,z);}
+ function box(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){return mesh(p,new RoundedBoxGeometry(w,h,d,grounded?2:1,Math.min(grounded?.035:.025,w/6,h/6,d/6)),m,x,y,z);}
+ function oval(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){const a=mesh(p,new THREE.SphereGeometry(1,grounded?20:14,grounded?14:10),m,x,y,z);a.scale.set(w,h,d);return a;}
+ function taper(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,top:number,bottom:number,h:number,depth=1){const a=mesh(p,new THREE.CylinderGeometry(top,bottom,h,grounded?20:10),m,x,y,z);a.scale.z=depth;return a;}
+ function plate(p:THREE.Object3D,m:THREE.Material,points:[number,number][],depth:number,x=0,y=0,z=0){const shape=new THREE.Shape(points.map(v=>new THREE.Vector2(...v)));return mesh(p,new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSize:.008,bevelThickness:.008,bevelSegments:grounded?2:1,steps:1}),m,x,y,z);}
  function pivot(parent:THREE.Group,x:number,y:number,z=0){const a=new THREE.Group();a.position.set(x,y,z);parent.add(a);pivots.push(a);return a;}
  const torso=pivot(body,0,1.11);taper(torso,armored?steel:cloth,0,.23,0,tank?.32:.27,.17,.57,.65);
  if(armored){plate(torso,steel,[[-.22,.5],[-.27,.3],[-.15,.02],[0,-.02],[.15,.02],[.27,.3],[.22,.5]],.05,0,0,-.19);box(torso,gold,0,.32,-.25,.035,.3,.018);for(const side of [-1,1]){const rib=box(torso,gold,side*.16,.18,-.244,.019,.22,.025);rib.rotation.z=side*-.28;for(let i=0;i<3;i++)oval(torso,gold,side*(.21-i*.035),.42-i*.12,-.23,.013,.013,.012);}}
@@ -43,14 +44,14 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  if(tank)for(const side of [-1,1])plate(body,steel,[[0,.13],[side*.25,.17],[side*.25,-.14],[side*.06,-.17]],.11,side*.12,1.02,-.12);
  const knees:THREE.Group[]=[],elbows:THREE.Group[]=[];
  const legs=[-1,1].map(side=>{const l=pivot(body,side*.13,1.02);taper(l,ink,0,-.19,0,.105,.085,.4,.84);const knee=pivot(l,0,-.39);knees.push(knee);taper(knee,armored?steel:leather,0,-.2,0,.087,.066,.37,.8);if(armored)plate(knee,steel,[[-.08,.025],[0,.09],[.08,.025],[.06,-.07],[-.06,-.07]],.07,0,0,-.11);box(knee,leather,0,-.46,-.066,.16,.13,.30);box(knee,ink,0,-.515,-.055,.18,.025,.33);return l;});
- const head=pivot(body,0,1.73);taper(body,ink,0,1.62,0,.07,.085,.16);
+ const head=pivot(body,0,1.73);if(grounded)head.scale.setScalar(.88);taper(body,ink,0,1.62,0,.07,.085,.16);
  if(cls==="Knight"||tank){
   taper(head,steel,0,.025,0,tank?.18:.16,.14,.34,.85);oval(head,steel,0,.2,.015,.175,.09,.15);
   plate(head,steel,[[-.14,.17],[0,.21],[.14,.17],[.13,-.1],[0,-.18],[-.13,-.1]],.02,0,0,-.155);
   box(head,ashen?light:ink,0,.035,-.19,.25,.036,.02);box(head,gold,0,.04,-.21,.017,.16,.018);
   for(const side of [-1,1])box(head,ink,side*.047,-.079,-.184,.012,.045,.018);
-  if(tank)for(const side of [-1,1]){const horn=mesh(head,new THREE.ConeGeometry(.085,.32,4),gold,side*.19,.16,.02);horn.rotation.z=side*-.8;}
-  else {const plume=plate(head,clothLight,[[-.025,0],[.05,.38],[.19,.26],[.1,.02]],.04,0,.23,.01);plume.rotation.y=Math.PI/2;}
+  if(tank&&!grounded)for(const side of [-1,1]){const horn=mesh(head,new THREE.ConeGeometry(.085,.32,4),gold,side*.19,.16,.02);horn.rotation.z=side*-.8;}
+  else if(!tank){const plume=plate(head,clothLight,[[-.025,0],[.05,.38],[.19,.26],[.1,.02]],.04,0,.23,.01);plume.rotation.y=Math.PI/2;if(grounded)plume.scale.y=.65;}
  }else{
   oval(head,skin,0,.025,-.04,.128,.18,.11);oval(head,hair,0,.15,.025,.15,.12,.13);
   for(const side of [-1,1]){box(head,ivory,side*.05,.055,-.143,.049,.021,.008);box(head,ink,side*.05,.055,-.15,.012,.023,.006);const brow=box(head,hair,side*.05,.093,-.136,.058,.012,.009);brow.rotation.z=side*-.15;}
@@ -61,10 +62,10 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  if(appearance.hair==="braid")for(let i=0;i<7;i++)oval(head,hair,.075,.12-i*.065,.14,.035,.045,.04);
  if(appearance.accessory==="circlet")mesh(head,new THREE.TorusGeometry(.145,.012,4,16),gold,0,.13,0).rotation.x=Math.PI/2;
  if(appearance.accessory==="earring")mesh(head,new THREE.TorusGeometry(.025,.006,4,12),gold,.13,-.025,-.02);
- const arms=[-1,1].map(side=>{const a=pivot(body,side*(tank?.32:.255),1.5);if(armored){const pauldron=plate(a,steel,[[-.13,.03],[-.14,-.12],[0,-.18],[.14,-.12],[.13,.03],[0,.12]],.22,0,0,-.11);pauldron.rotation.z=side*-.12;box(a,gold,0,.01,-.125,.2,.022,.02);}taper(a,caster?cloth:ink,0,-.15,0,.085,.065,.32,.8);const elbow=pivot(a,0,-.3);elbows.push(elbow);taper(elbow,armored?steel:cloth,0,-.13,0,.09,.055,.26,.8);box(elbow,leather,0,-.295,-.01,.105,.13,.085);return a;});
+ const arms=[-1,1].map(side=>{const a=pivot(body,side*(tank?.32:.255),1.5);if(armored){if(grounded){oval(a,steel,0,-.015,0,.15,.13,.16);const rim=oval(a,gold,0,-.06,0,.153,.018,.163);rim.rotation.z=side*-.12;}else{const pauldron=plate(a,steel,[[-.13,.03],[-.14,-.12],[0,-.18],[.14,-.12],[.13,.03],[0,.12]],.22,0,0,-.11);pauldron.rotation.z=side*-.12;box(a,gold,0,.01,-.125,.2,.022,.02);}}taper(a,caster?cloth:ink,0,-.15,0,.085,.065,.32,.8);const elbow=pivot(a,0,-.3);elbows.push(elbow);taper(elbow,armored?steel:cloth,0,-.13,0,.09,.055,.26,.8);box(elbow,leather,0,-.295,-.01,.105,.13,.085);return a;});
  const equipped=preview||!!appearance.weapon;
  if(equipped){
-  if(tank){taper(elbows[1],leather,0,-.28,-.4,.025,.025,1.2);const hammer=mesh(elbows[1],new THREE.CylinderGeometry(.23,.23,.65,8),steel,0,.28,-.4);hammer.rotation.z=Math.PI/2;for(const side of [-1,1]){const rim=mesh(elbows[1],new THREE.CylinderGeometry(.26,.26,.06,8),gold,side*.30,.28,-.4);rim.rotation.z=Math.PI/2;}for(const side of [-1,1])box(elbows[1],ink,side*.10,.28,-.635,.035,.27,.015);}
+  if(tank){taper(elbows[1],leather,0,-.28,-.4,.025,.025,grounded?1.0:1.2);const hammer=mesh(elbows[1],new THREE.CylinderGeometry(grounded?.17:.23,grounded?.17:.23,grounded?.48:.65,grounded?16:8),steel,0,.28,-.4);hammer.rotation.z=Math.PI/2;for(const side of [-1,1]){const rim=mesh(elbows[1],new THREE.CylinderGeometry(grounded?.19:.26,grounded?.19:.26,.06,grounded?16:8),gold,side*(grounded?.225:.30),.28,-.4);rim.rotation.z=Math.PI/2;}for(const side of [-1,1])box(elbows[1],ink,side*.10,.28,-.635,.035,.27,.015);}
   else if(caster){taper(elbows[1],leather,0,.18,-.08,.026,.032,1.48);mesh(elbows[1],new THREE.TorusGeometry(warden?.17:.14,.024,5,16),gold,0,.98,-.08);mesh(elbows[1],new THREE.OctahedronGeometry(.085,0),light,0,.98,-.08);if(warden)for(const side of [-1,1]){const leaf=mesh(elbows[1],new THREE.OctahedronGeometry(.08,0),clothLight,side*.17,.93,-.08);leaf.scale.set(.7,1.5,.4);leaf.rotation.z=side*-.6;}}
   else for(const side of rogue?[-1,1]:[1]){const hand=elbows[side===1?1:0];box(hand,leather,0,-.29,-.1,.055,.06,.20);box(hand,gold,0,-.29,-.18,.22,.03,.035);plate(hand,steel,[[-.04,0],[.04,0],[.033,rogue?-.42:-.85],[0,rogue?-.53:-1],[-.033,rogue?-.42:-.85]],.025,0,-.29,-.18).rotation.x=Math.PI/2;}
   if(cls==="Knight"){plate(elbows[0],ink,[[-.22,.23],[.22,.23],[.19,-.19],[0,-.39],[-.19,-.19]],.08,0,-.15,-.16);plate(elbows[0],cloth,[[-.19,.20],[.19,.20],[.16,-.16],[0,-.34],[-.16,-.16]],.013,0,-.15,-.18);box(elbows[0],ivory,0,-.17,-.20,.035,.4,.018);box(elbows[0],ivory,0,-.08,-.20,.23,.025,.018);}
@@ -93,18 +94,18 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  }
  box(body,clothLight,0,1.54,.045,.4,.08,.27).rotation.x=.1;
  // Batch each pivot by surface so bronze, plate and cloth keep distinct light response.
- const surfaces={metal:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.3,metalness:.62}),cloth:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.94,map:weave}),matte:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78})};materials.push(...Object.values(surfaces));
+ const surfaces={metal:new THREE.MeshStandardMaterial({vertexColors:true,roughness:grounded?.55:.3,metalness:grounded?.8:.62,roughnessMap:grounded?weave:null,bumpMap:grounded?weave:null,bumpScale:.006}),cloth:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.94,map:weave}),matte:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78})};materials.push(...Object.values(surfaces));
  for(const p of pivots){const batches=new Map<keyof typeof surfaces,THREE.BufferGeometry[]>();for(const child of [...p.children]){if(!(child instanceof THREE.Mesh)||child===cape||child.material===light)continue;child.updateMatrix();const g=child.geometry.clone().applyMatrix4(child.matrix),normalized=g.index?g.toNonIndexed():g;if(g.index)g.dispose();const surface=child.material===steel||child.material===gold?"metal":child.material===cloth||child.material===clothLight?"cloth":"matte";for(const key of Object.keys(normalized.attributes))if(!["position","normal","uv"].includes(key))normalized.deleteAttribute(key);if(!normalized.attributes.uv)normalized.setAttribute("uv",new THREE.Float32BufferAttribute(new Float32Array(normalized.attributes.position.count*2),2));const color=(child.material as THREE.MeshStandardMaterial).color,colors=new Float32Array(normalized.attributes.position.count*3);for(let i=0;i<colors.length;i+=3){colors[i]=color.r;colors[i+1]=color.g;colors[i+2]=color.b;}normalized.setAttribute("color",new THREE.BufferAttribute(colors,3));const parts=batches.get(surface)??[];parts.push(normalized);batches.set(surface,parts);p.remove(child);}for(const [surface,parts] of batches){const merged=mergeGeometries(parts);if(merged){geometries.push(merged);const combined=new THREE.Mesh(merged,surfaces[surface]);combined.castShadow=true;combined.receiveShadow=true;p.add(combined);}parts.forEach(g=>g.dispose());}}
  let gait=0,stride=0,lastAnimationTime=0,chill=0;const solePoint=new THREE.Vector3(),verticalAxis=new THREE.Vector3(),soleCorners=[-.09,.09].flatMap(x=>[-.22,.11].map(z=>new THREE.Vector3(x,-.5275,z)));
  const frostColor=new THREE.Color("#b2dff0"),neutral=new THREE.Color("#ffffff");group.userData.appearance=[appearance.weapon,appearance.hair,appearance.accessory].join("|");
  return {group,left:legs[0],right:legs[1],arm:arms[1],cape,
-  setFrost(active:boolean,seconds:number){chill+=(Number(active)-chill)*(1-Math.exp(-8*seconds));for(const surface of Object.values(surfaces)){surface.color.copy(neutral).lerp(frostColor,chill*.55);surface.emissive.copy(frostColor);surface.emissiveIntensity=chill*.19;}surfaces.metal.roughness=.3+chill*.25;},
-  animate(time:number,movement:number,attack=0,dash=0,reduced=false,action?:CombatAction|null,serverTime?:number){
+  setFrost(active:boolean,seconds:number){chill+=(Number(active)-chill)*(1-Math.exp(-8*seconds));for(const surface of Object.values(surfaces)){surface.color.copy(neutral).lerp(frostColor,chill*.55);surface.emissive.copy(frostColor);surface.emissiveIntensity=chill*.19;}surfaces.metal.roughness=(grounded?.55:.3)+chill*.2;},
+  animate(time:number,movement:number,attack=0,dash=0,reduced=false,action?:CombatAction|null,serverTime?:number,travelAngle=0){
    const pose=action?combatPose(action,serverTime??time*1000):{windup:0,strike:attack,recovery:0};const windup=pose.windup,hit=pose.strike;
    const dt=lastAnimationTime?Math.max(0,Math.min(.1,time-lastAnimationTime)):1/60;lastAnimationTime=time;const t=reduced?0:time,oldWalk=reduced?0:Math.sqrt(gait);gait+=(Math.max(0,Math.min(1,movement))-gait)*(1-Math.exp(-10*dt));const walk=reduced?0:Math.sqrt(gait);
-   stride=(stride+dt*25/physique.height/Math.max(.1,group.scale.x)*(oldWalk+walk)*.5)%(Math.PI*2);const cycle=stride;
-   body.position.y=0;body.rotation.x=dash*-.28+(rogue?-.08:0);body.rotation.y=Math.sin(cycle)*walk*.055;head.rotation.y=Math.sin(t*.7)*.025;
-   legs.forEach((leg,i)=>{const step=Math.sin(cycle+i*Math.PI)*walk;leg.rotation.x=step*.48;knees[i].rotation.x=Math.max(0,-step)*.8;});arms.forEach((arm,i)=>{arm.rotation.set(-Math.sin(cycle+i*Math.PI)*walk*.28,0,(i?1:-1)*.07);elbows[i].rotation.x=-.10;});
+   stride=(stride+dt*(grounded?15:25)/physique.height/Math.max(.1,group.scale.x)*(oldWalk+walk)*.5)%(Math.PI*2);const cycle=stride;
+   body.position.y=0;body.rotation.x=dash*-.28+(rogue?-.08:0);body.rotation.y=Math.sin(cycle)*walk*(grounded?.025:.055);head.rotation.y=Math.sin(t*.7)*.025;
+   legs.forEach((leg,i)=>{const step=Math.sin(cycle+i*Math.PI)*walk;leg.rotation.set(step*(grounded?.62*Math.cos(travelAngle):.48),0,grounded?step*.45*Math.sin(travelAngle):0);knees[i].rotation.x=Math.max(0,-step)*.8;});arms.forEach((arm,i)=>{arm.rotation.set(-Math.sin(cycle+i*Math.PI)*walk*(grounded?.21:.28),0,(i?1:-1)*(grounded?.035:.07));elbows[i].rotation.x=grounded?-.27:-.10;});
    if(ashen&&action){const motion=enemyMotion(action,serverTime??time*1000);body.rotation.x+=motion.bodyX;body.rotation.y+=motion.bodyY;arms[1].rotation.set(motion.armX,motion.armY,motion.armZ);arms[0].rotation.x=motion.braceX;elbows[1].rotation.x=motion.elbowX;legs[0].rotation.x+=windup*.16;legs[1].rotation.x-=windup*.12;}
    else if(caster){arms[1].rotation.x-=windup*.45+hit*1.3;arms[0].rotation.x-=windup*.7+hit*.9;arms[0].rotation.z-=hit*.28;elbows[1].rotation.x-=windup*.35;}
    else if(tank){arms[1].rotation.x-=windup*2.1+hit*.5;elbows[1].rotation.x-=windup*.6;body.rotation.x-=windup*.11;body.rotation.x+=hit*.13;arms[0].rotation.x-=windup*.5;}

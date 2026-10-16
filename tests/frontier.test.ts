@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {Rooms} from "../apps/web/app/ashwatch/rooms.ts";
 import {COMBAT} from "../apps/web/app/ashwatch/combat.ts";
 import {FrontierState,validateFrontierCommand,type Material,type FrontierCommand} from "../apps/web/app/ashwatch/frontier.ts";
-import {terrainHeight,riverCenter,inRiver} from "../apps/web/app/ashwatch/frontier-land.ts";
+import {terrainHeight,riverCenter,inRiver,FOREST} from "../apps/web/app/ashwatch/frontier-land.ts";
 import {BUILDINGS} from "../apps/web/app/ashwatch/world.ts";
 
 function fixture(){
@@ -134,4 +134,9 @@ test("both door controls let a player close from inside a small cabin but never 
   Object.assign(f.p,{x:rotation?950:947,y:rotation?1747:1750});const v=use();assert.equal(door.open,true);assert.match(v.frontier!.message,/Step clear/);
   clear();use();assert.equal(door.open,false);
  }
+});
+
+
+test("new paid floors reject overhanging tree crowns without spending the satchel",()=>{
+ const f=fixture();f.farm("timber",20);f.farm("stone",10);const tree=FOREST[0],x=Math.round(tree.x/50)*50,y=Math.round(tree.y/50)*50;Object.assign(f.p,{x:x-80,y,facing:0});const before=f.w.snapshot(f.s.id,f.s.token).frontier!.supplies;const v=f.command({kind:"build",piece:"foundation",x,y,rotation:0});assert.match(v.frontier!.message,/overhanging branches/);assert.deepEqual(v.frontier!.supplies,before);assert.equal(f.w.frontier!.structures.length,0);
 });

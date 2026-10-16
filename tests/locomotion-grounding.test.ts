@@ -15,3 +15,20 @@ test("the actual walk cycle settles consistently at thirty and one hundred twent
  for(const fps of [30,120]){const a=adventurer("Knight",{weapon:"watch-sword"});try{a.animate(100,0);for(let frame=1;frame<=fps;frame++)a.animate(100+frame/fps,.2);outcomes.push(a.left.rotation.x);}finally{a.dispose();}}
  assert.ok(Math.abs(outcomes[0]-outcomes[1])<.015,`pose difference ${Math.abs(outcomes[0]-outcomes[1])}`);
 }));
+
+
+test("all five frontier bodies retain planted boots through their calmer travel cycle",()=>withCanvas(()=>{
+ for(const cls of Object.keys(PHYSIQUE) as (keyof typeof PHYSIQUE)[])for(const movement of [.1,.65,1]){const a=adventurer(cls,{frontier:true,weapon:"sword"}),bounds=new THREE.Box3();try{a.animate(100,0);for(let frame=1;frame<=75;frame++){a.animate(100+frame/60,movement);a.group.updateMatrixWorld(true);const lowest=Math.min(bounds.setFromObject(a.left).min.y,bounds.setFromObject(a.right).min.y);assert.ok(lowest>=-.004&&lowest<.014,`${cls}:sole${lowest}`);}}finally{a.dispose();}}
+}));
+
+test("frontier backpedal and strafe poses follow actual travel without ungrounding boots",()=>withCanvas(()=>{
+ for(const cls of Object.keys(PHYSIQUE) as (keyof typeof PHYSIQUE)[])for(const angle of [Math.PI,-Math.PI/2,Math.PI/2]){
+  const a=adventurer(cls,{frontier:true,weapon:"sword"}),bounds=new THREE.Box3();
+  try{a.animate(100,0);for(let frame=1;frame<=60;frame++){
+   a.animate(100+frame/60,.65,0,0,false,null,undefined,angle);a.group.updateMatrixWorld(true);
+   const lowest=Math.min(bounds.setFromObject(a.left).min.y,bounds.setFromObject(a.right).min.y);
+   assert.ok(lowest>=-.004&&lowest<.014,`${cls}, angle ${angle}: sole ${lowest}`);
+   if(Math.abs(angle)===Math.PI/2)assert.ok(Math.abs(a.left.rotation.x)<.001,"sideways travel must use lateral steps");
+  }}finally{a.dispose();}
+ }
+}));

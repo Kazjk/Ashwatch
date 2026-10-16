@@ -7,10 +7,10 @@ export const preserveCombatFacing=(attackAt:number,serverTime:number)=>attackAt>
 
 // Camera-relative travel is evaluated against today's orbit, never a stale key-down angle.
 // Facing is an input request only; the server still locks a committed action's direction.
-export function playerInput(x:number,y:number,orbit:number,look:number|undefined,current:number,aiming:boolean,striking:boolean){
+export function playerInput(x:number,y:number,orbit:number,look:number|undefined,current:number,aiming:boolean,striking:boolean,frontier=false){
  const length=Math.max(1,Math.hypot(x,y));
  const movement=travelVector(x/length,y/length,orbit);
- return {...movement,facing:aiming||striking?look??current:x||y?undefined:look};
+ return {...movement,facing:aiming||striking||frontier?look??current:x||y?undefined:look};
 }
 
 // A following camera must not rotate a held movement command back into itself.

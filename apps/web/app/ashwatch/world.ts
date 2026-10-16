@@ -7,6 +7,7 @@ import {beginAction,combatStage,COMBAT,OPENING_DAMAGE,inBackArc,type CombatActio
 import {MIN_TRAVEL,dashVector} from "./input-motion.ts";
 import {FrontierState,validateFrontierCommand,type FrontierCommand,type FrontierView} from "./frontier.ts";
 import {inRiver,riverCenter,trunkBlocked} from "./frontier-land.ts";
+import {SETTLEMENT_BUILDINGS} from "./settlement-layout.ts";
 export type HeroClass = ClassName;
 
 export type Point = { x: number; y: number };
@@ -46,7 +47,7 @@ export const TOWNS = [
  {id:"highcrown",name:"Highcrown",x:550,y:530,size:1.65,arena:{x:320,y:760,r:170},guild:{x:390,y:420},inn:{x:710,y:610}}
 ];
 export const arenaAt=(p:Point & {floor:number})=>p.floor===0?TOWNS.find(t=>distance(p,t.arena)<t.arena.r):undefined;
-export const BUILDINGS = [[770,1450,1.1],[1040,1370,1],[820,1640,.9],[1100,1690,.85],[685,1630,.75],[390,420,1.65],[710,610,1.5],[470,660,1.2],[740,370,1.35],[530,300,1.6]];
+export const BUILDINGS = SETTLEMENT_BUILDINGS;
 // Centered on the rendered house; includes the roof overhang and the hero capsule.
 export const buildingContains=(point:Point,padding=8)=>BUILDINGS.some(([x,y,size])=>Math.abs(point.x-x)<65*size+padding&&Math.abs(point.y-y)<47*size+padding);
 export const buildingEntrance=(point:Point):Point=>{const size=BUILDINGS.find(([x,y])=>x===point.x&&y===point.y)?.[2]??1;return {x:point.x,y:point.y+Math.max(75,47*size+24)};};
@@ -81,9 +82,9 @@ export const requiredXp = (level: number) => level * 65;
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
 
-type PrivateHero = Hero & { token: string; seq: number; lastSeen: number; inputAt:number; input: Point; nextAttack: number; nextSkill: number; nextDodge: number; dodgeX:number; dodgeY:number; explored: Set<string>; };
+type PrivateHero = Hero & { token: string; seq: number; lastSeen: number; inputAt:number; sprint?:boolean; input: Point; nextAttack: number; nextSkill: number; nextDodge: number; dodgeX:number; dodgeY:number; explored: Set<string>; };
 
-export type Input = { frontier?:FrontierCommand;sequence: number; x: number; y: number; facing?: number; attack?: boolean; skill?: boolean; dodge?: boolean; interact?: boolean; warn?:boolean; service?: "mission"|"claim"|"rest"|"party"; partyCode?:string };
+export type Input = { frontier?:FrontierCommand;sequence: number; x: number; y: number; facing?: number; sprint?:boolean; attack?: boolean; skill?: boolean; dodge?: boolean; interact?: boolean; warn?:boolean; service?: "mission"|"claim"|"rest"|"party"; partyCode?:string };
 
 export class LivingWorld {
 
@@ -237,7 +238,7 @@ export class LivingWorld {
 
     if (![input.x, input.y].every(Number.isFinite) || (input.facing !== undefined && !Number.isFinite(input.facing))) throw Error("INVALID_INPUT");
 
-    if ([input.attack,input.skill,input.dodge,input.interact,input.warn].some(value=>value!==undefined&&typeof value!=="boolean")) throw Error("INVALID_INPUT");
+    if ([input.attack,input.skill,input.dodge,input.interact,input.warn,input.sprint].some(value=>value!==undefined&&typeof value!=="boolean")) throw Error("INVALID_INPUT");
 
     const frontierCommand=input.frontier===undefined?undefined:validateFrontierCommand(input.frontier);if(frontierCommand&&!this.frontier)throw Error("Choose the wild frontier first.");
     if(input.sequence<=p.seq){p.lastSeen=this.clock();return this.view(p);}
@@ -245,7 +246,7 @@ export class LivingWorld {
 
     const len = Math.max(1, Math.hypot(input.x, input.y));
 
-    p.input = { x: clamp(input.x / len, -1, 1), y: clamp(input.y / len, -1, 1) };
+    p.input = { x: clamp(input.x / len, -1, 1), y: clamp(input.y / len, -1, 1) };p.sprint=!!input.sprint;
 
     if (p.hp <= 0 || this.watch&&this.watch.state!=="active"&&this.watch.state!=="forming") {p.input={x:0,y:0};return this.view(p);}
     if(input.warn&&this.watch?.state==="forming")this.drill(p).called=true;
@@ -347,7 +348,7 @@ export class LivingWorld {
       const dodging=p.dodgeAt>0 && now-p.dodgeAt<360;
       p.moving = dodging || active && Math.hypot(p.input.x, p.input.y) > MIN_TRAVEL;
 
-      const speed = dodging ? CLASSES[p.heroClass].dash + p.agility*18 : 155*(this.frontier&&!p.floor&&inRiver(p.x,p.y)?.68:1)*((p.webUntil??0)>now?.65:1)*(this.watch?OATHS[this.watch.oath].speed:1)*(p.action?(p.action.stage==="intent"?1:p.action.stage==="recovery"?.75:.45):1);const mx=dodging?p.dodgeX:p.input.x,my=dodging?p.dodgeY:p.input.y;
+      const speed = dodging ? CLASSES[p.heroClass].dash + p.agility*18 : (this.frontier&&!p.floor&&!p.sprint?100:155)*(this.frontier&&!p.floor&&inRiver(p.x,p.y)?.68:1)*((p.webUntil??0)>now?.65:1)*(this.watch?OATHS[this.watch.oath].speed:1)*(p.action?(p.action.stage==="intent"?1:p.action.stage==="recovery"?.75:.45):1);const mx=dodging?p.dodgeX:p.input.x,my=dodging?p.dodgeY:p.input.y;
 
       if (p.moving) {
 
@@ -360,7 +361,7 @@ export class LivingWorld {
         if(!blocked(nx,p.y))p.x=nx;
 
         if(!blocked(p.x,ny))p.y=ny;
-        const bodies:Point[]=[...this.heroes.values()].filter(q=>q.id!==p.id&&q.floor===p.floor&&q.hp>0&&now-q.lastSeen<2000);if(!p.floor)bodies.push(...residents(now,this.dragon.state==="enraged"));
+        const bodies:Point[]=[...this.heroes.values()].filter(q=>q.id!==p.id&&q.floor===p.floor&&q.hp>0&&now-q.lastSeen<2000);if(!p.floor&&!this.frontier)bodies.push(...residents(now,this.dragon.state==="enraged"));
         for(const q of bodies){const d=distance(p,q);if(d>0&&d<22){const shift=(22-d)/2;p.x+=(p.x-q.x)/d*shift;p.y+=(p.y-q.y)/d*shift;}}
 
 

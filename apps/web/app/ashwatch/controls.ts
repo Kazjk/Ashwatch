@@ -16,7 +16,7 @@ export function travelVector(x:number,y:number,basis:number){return {x:-y*Math.c
 export function lookDelta(pixels:number,sensitivity:number,device:"mouse"|"touch"){return clamp(pixels,-300,300)*sensitivity*(device==="mouse"?.004:.005);}
 export function stick(x:number,y:number,radius=1,deadZone=.16){const length=Math.hypot(x,y)/radius;if(length<=deadZone)return {x:0,y:0};const response=Math.pow(clamp((length-deadZone)/(1-deadZone),0,1),1.35);return {x:x/Math.hypot(x,y)*response,y:y/Math.hypot(x,y)*response};}
 export const turnRate=(axis:number,sensitivity:number,seconds:number)=>axis*2.2*sensitivity*Math.min(.1,Math.max(0,seconds));
-export function cameraRig(awareness:number,distance=DEFAULTS.distance){const progress=clamp(awareness,0,100)/100;return {distance:distance+progress*1.8,height:3.8+progress*1.2,targetHeight:1.2,fov:58};}
+export function cameraRig(awareness:number,distance=DEFAULTS.distance,frontier=false){const progress=clamp(awareness,0,100)/100;return {distance:distance+progress*1.8,height:(frontier?2.8:3.8)+progress*(frontier?1:1.2),targetHeight:1.2,fov:58};}
 export type Box={min:{x:number;y:number;z:number};max:{x:number;y:number;z:number}};
 export type Vec={x:number;y:number;z:number};
 // Swept camera sphere against cached static bounds, using expanded-box slab tests.

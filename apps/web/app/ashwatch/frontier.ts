@@ -1,4 +1,4 @@
-import {trunkBlocked,inRiver,terrainHeight} from "./frontier-land.ts";
+import {trunkBlocked,inRiver,terrainHeight,canopyOverlaps} from "./frontier-land.ts";
 export type Material="timber"|"stone"|"herb"|"aether";
 export type Supplies=Record<Material,number>;
 export type StructureKind="hearth"|"foundation"|"wall"|"door"|"roof"|"bedroll"|"ward";
@@ -10,7 +10,7 @@ type Needs={supplies:Supplies;hatchet:boolean;milestones:string[];hunger:number;
 export type FrontierView={nodes:ResourceNode[];structures:Structure[];supplies:Supplies;hatchet:boolean;milestones:string[];hunger:number;thirst:number;warmth:number;day:number;message:string;messageAt:number;sheltered:boolean};
 export const RECIPES={
  hatchet:{name:"Stone hatchet",cost:{timber:8,stone:5}},meal:{name:"Foraged meal",cost:{herb:2}},
- hearth:{name:"Hearth",cost:{timber:10,stone:8}},foundation:{name:"Timber floor",cost:{timber:8,stone:4}},wall:{name:"Palisade wall",cost:{timber:6,stone:2}},door:{name:"Doorway",cost:{timber:8,stone:2}},roof:{name:"Timber roof",cost:{timber:10,stone:4}},bedroll:{name:"Bedroll",cost:{timber:5,herb:4}},ward:{name:"Aether ward",cost:{stone:8,aether:3}}
+ hearth:{name:"Hearth",cost:{timber:10,stone:8}},foundation:{name:"Timber floor",cost:{timber:8,stone:4}},wall:{name:"Timber wall",cost:{timber:6,stone:2}},door:{name:"Doorway",cost:{timber:8,stone:2}},roof:{name:"Timber roof",cost:{timber:10,stone:4}},bedroll:{name:"Bedroll",cost:{timber:5,herb:4}},ward:{name:"Aether ward",cost:{stone:8,aether:3}}
 } as const;
 export const frontierDay=(now:number,began:number)=>((now-began)/480000+.34)%1;
 export const frontierNight=(day:number)=>day>.68||day<.16;
@@ -71,6 +71,7 @@ export class FrontierState{
    if(s.kind!=="door")throw Error("This structure works while you stay nearby.");if(s.open&&occupied(s,s.rotation))throw Error("Step clear before closing the door.");s.open=!s.open;this.say(h.id,s.open?"Door opened.":"Door closed.",now);
   }else{
    const grid=command.piece==="wall"||command.piece==="door"?25:50;const point={x:Math.round(command.x/grid)*grid,y:Math.round(command.y/grid)*grid};
+   if(command.piece==="foundation"&&canopyOverlaps(point.x,point.y))throw Error("Choose a clearing away from overhanging branches.");
    if(inRiver(point.x,point.y)||Math.max(...[-25,25].flatMap(dx=>[-25,25].map(dy=>terrainHeight(point.x+dx,point.y+dy))))-Math.min(...[-25,25].flatMap(dx=>[-25,25].map(dy=>terrainHeight(point.x+dx,point.y+dy))))>.65)throw Error("Find dry, gently sloping ground for your shelter.");
    if(command.piece==="roof"&&!this.structures.some(s=>s.kind==="foundation"&&dist(s,point)<8&&this.friendly(h,s)))throw Error("A roof needs your timber floor beneath it.");
    if(point.x<80||point.y<80||point.x>2320||point.y>2320||dist(h,point)>145||!visible(point)||blocked(point)||command.piece!=="roof"&&occupied(point))throw Error("Choose clear ground within reach and in front of you.");

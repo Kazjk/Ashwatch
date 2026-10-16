@@ -29,3 +29,8 @@ test("controller cover calls use the right shoulder edge and cannot carry across
  input.sample(p,false,.65,.01);assert.equal(input.sample(p,true,.65,.01).warn,false);
  p.buttons[5].pressed=false;input.sample(p,true,.65,.01);p.buttons[5].pressed=true;assert.equal(input.sample(p,true,.65,.01).warn,true);
 });
+
+
+test("left-stick running uses a deliberate edge and does not retrigger while held",()=>{
+ const p=pad(),input=new GamepadInput();input.sample(p,true,.65,.01);p.buttons[10].pressed=true;assert.equal(input.sample(p,true,.65,.01).runToggle,true);assert.equal(input.sample(p,true,.65,.01).runToggle,false);input.sample(p,false,.65,.01);assert.equal(input.sample(p,true,.65,.01).runToggle,false);p.buttons[10].pressed=false;input.sample(p,true,.65,.01);p.buttons[10].pressed=true;assert.equal(input.sample(p,true,.65,.01).runToggle,true);
+});

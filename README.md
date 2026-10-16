@@ -13,9 +13,9 @@ The map is a compact playable slice, not a Rust-sized open world. Characters and
 
 Create a room, share its six-character code and have friends select Join friends by code on the same page. No player login or installation is needed. Frontier and company watch have separate browser session keys, so opening the frontier does not discard an existing company character.
 
-WASD/arrows move relative to the camera. Right drag, Q/R or touch look turns the character and following camera. Click/J/1 strikes; hold to repeat. F faces a visible enemy. Space dashes. G calls for cover. K/2 uses your class skill. In the company watch, E also uses the class skill.
+In the frontier, WASD/arrows move relative to the camera: A/D strafe and S backpedals while your facing stays fixed. Hold Shift to run; touch players have a Run toggle and controllers use a left-stick click. Right drag, Q/R or touch look turns the character and following camera. Company watch keeps its established travel controls. Click/J/1 strikes; hold to repeat. F faces a visible enemy. Space dashes. G calls for cover. K/2 uses your class skill. In the company watch, E also uses the class skill.
 
-In the frontier, E faces the nearest already-visible resource; move closer and press E or hold Strike to gather. E also drinks beside the river and opens/closes a nearby company doorway. B opens the satchel. Choose a building, face clear ground and click Place (or the world). R rotates the plan; Escape cancels. A roof requires a timber floor beneath it. The outline is a plan; the server checks terrain, obstacles, materials, ownership, range and occupancy before building. Menus stop your controls while the shared world continues.
+In the frontier, E faces the nearest already-visible resource; move closer and press E or hold Strike to gather. E also drinks beside the river and opens/closes a nearby company doorway. B opens the satchel. Choose a building, face clear ground and click Place (or the world). R rotates the plan; Escape cancels. A roof requires a timber floor beneath it. The outline is a plan; the server checks terrain, obstacles, materials, ownership, range and occupancy before building. Foundations need a clearing outside tree canopies; a red plan explains overhanging branches before any materials are spent. Menus stop your controls while the shared world continues.
 
 Menu contains persistent sensitivity, camera, volume, graphics and reduced-motion settings. Auto graphics reduces vegetation/terrain detail on narrow screens.
 
@@ -61,3 +61,9 @@ Snapshots/resume/input can retry once with the same input sequence. Entry, craft
 See ASSET_SOURCES.md and the material PROVENANCE.json for all sources, licenses and checksums. Original code-built art and procedural sound are retained. The frontier uses free CC0 Poly Haven materials/sky and no Rust assets.
 
 Automated tests, real protocol clients and direct browser inspection are separate evidence. Audio has not been listened to, physical devices have not been tested and representative human co-op feedback is still outstanding. Competition eligibility, the signed-in mission/Code of Conduct, generated-asset acceptance and the entrant's final submission remain user review gates.
+
+## Graphics and controls refinement
+
+Tree placement reserves the complete branch/crown envelope around settlement buildings. Sawn boards, braced timber walls, cedar shingles and filled roof ends distinguish construction from tree bark. Frontier bodies use restrained human proportions, smoother armor and calmer, travel-directed walking/strafe/backpedal poses. Lower camera framing follows the same server-permitted view. Legacy invisible villagers no longer collide with frontier players. Characters are still procedural; a downloaded rigged-asset trial is not part of this release.
+
+210 deterministic tests pass, including actual instanced-tree bounds versus buildings, all five grounded bodies in lateral/backward travel, sprint validation, directional controls and no-payment canopy rejection. Direct browser checks cover keyboard walk/backpedal/Shift-run, a 390-pixel layout and its Run toggle. Two independent protocol clients verify harvesting, a full paid shelter, private materials, reconnect and duplicates. These checks do not establish human game feel, audio quality or award readiness.
