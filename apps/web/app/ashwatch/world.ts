@@ -552,11 +552,11 @@ export class LivingWorld {
   }
 
   private cover(helper:PrivateHero,protectedIds:string[],now:number){
-    if(this.watch?.state!=="active")return;
+    if(this.watch?.state!=="active"&&!this.frontier)return;
     for(const id of new Set(protectedIds)){
       const ally=this.heroes.get(id);if(!ally||ally.hp<=0||id===helper.id||!helper.party||ally.party!==helper.party||ally.floor!==helper.floor)continue;
       const call=this.callouts.findLast(c=>c.caller===id&&now-c.at<2800);if(!call||call.coveredBy)continue;
-      call.coveredBy=helper.id;this.watch.covers++;this.effect(ally.x,ally.y,ally.floor,"cover",now,0);
+      call.coveredBy=helper.id;if(this.watch)this.watch.covers++;this.effect(ally.x,ally.y,ally.floor,"cover",now,0);
     }
   }
 

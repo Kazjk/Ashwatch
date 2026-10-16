@@ -47,7 +47,7 @@ export class FrontierState{
  private friendly(h:FrontierHero,s:Structure){return s.owner===h.id||!!h.party&&s.party===h.party;}
  private pay(h:FrontierHero,cost:Partial<Supplies>){const bag=this.person(h.id).supplies;for(const [key,n] of Object.entries(cost))if(bag[key as Material]<n)throw Error(`Need ${n} ${key}.`);for(const [key,n] of Object.entries(cost))bag[key as Material]-=n;}
  gather(h:FrontierHero,now:number,visible:(p:{x:number;y:number})=>boolean){
-  if(h.floor||h.hp<=0)return null;const p=this.person(h.id);if(now-p.lastGather<600)return null;
+  if(h.floor||h.hp<=0)return null;const p=this.person(h.id);if(now-p.lastGather<500)return null;
   const node=this.nodes.filter(n=>n.remaining>0&&dist(h,n)<76&&visible(n)).sort((a,b)=>dist(h,a)-dist(h,b))[0];if(!node)return null;
   const amount=Math.min(node.remaining,node.kind==="aether"?1:node.kind==="herb"?2:p.hatchet?10:5,200-p.supplies[node.kind]);if(amount<=0){this.say(h.id,"Your satchel is full of this material.",now);return null;}
   node.remaining-=amount;node.resetAt=node.remaining?0:now+180000;p.supplies[node.kind]+=amount;p.lastGather=now;this.say(h.id,`+${amount} ${node.kind}`,now);return node;

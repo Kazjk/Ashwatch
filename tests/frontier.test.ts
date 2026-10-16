@@ -104,6 +104,12 @@ test("the river is a bounded wading channel rather than a deep invisible walking
  for(let y=100;y<2300;y+=100){const floor=terrainHeight(riverCenter(y),y);assert.ok(floor>=-1.45);assert.ok(-.8-floor<.9);}
 });
 
-for(const cls of ["Knight","Spellweaver","Ironbound","Rogue","Warden"] as const)test(`${cls} harvests only at its own authoritative contact and stays in the frontier at the old portal`,()=>{
- let now=100000;const rooms=new Rooms(()=>now),session=rooms.create("Class harvest",cls,"frontier"),w=rooms.get(session.room).world,p=w.heroes.get(session.id)!;w.monsters=[];const node=w.frontier!.nodes.find(n=>n.kind==="timber")!;Object.assign(p,{x:node.x,y:node.y+50,facing:-Math.PI/2});w.input(p.id,p.token,{sequence:1,x:0,y:0,attack:true});now+=COMBAT[cls].contact-1;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,0);now++;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,5);now+=2000;Object.assign(p,{x:1440,y:850});w.snapshot(p.id,p.token);assert.equal(p.floor,0);
+test("frontier cover calls acknowledge real help and cannot be answered by an ineffective Renew",()=>{
+ const f=fixture(),ally=f.rooms.join(f.s.room,"Frontier medic","Warden"),medic=f.w.heroes.get(ally.id)!;Object.assign(f.p,{x:1000,y:1500,facing:Math.PI});Object.assign(medic,{x:950,y:1500,facing:0});
+ f.input({warn:true});f.w.input(ally.id,ally.token,{sequence:1,x:0,y:0,skill:true});f.advance(COMBAT.Warden.skillContact);assert.equal(f.w.snapshot(f.s.id,f.s.token).ownCall?.answeredBy,undefined);
+ f.advance(6600);f.p.hp-=30;f.input({warn:true});f.w.input(ally.id,ally.token,{sequence:2,x:0,y:0,skill:true});f.advance(COMBAT.Warden.skillContact);const v=f.w.snapshot(f.s.id,f.s.token);assert.equal(f.p.hp,f.p.maxHp);assert.equal(v.ownCall?.answeredBy,"Frontier medic");assert.ok(v.effects.some(e=>e.kind==="cover"));
+});
+
+for(const cls of ["Knight","Spellweaver","Ironbound","Rogue","Warden"] as const)test(`${cls} harvests at both accepted contacts without dropping the next strike and stays in the frontier`,()=>{
+ let now=100000;const rooms=new Rooms(()=>now),session=rooms.create("Class harvest",cls,"frontier"),w=rooms.get(session.room).world,p=w.heroes.get(session.id)!;w.monsters=[];const node=w.frontier!.nodes.find(n=>n.kind==="timber")!;Object.assign(p,{x:node.x,y:node.y+50,facing:-Math.PI/2});w.input(p.id,p.token,{sequence:1,x:0,y:0,attack:true});now+=COMBAT[cls].contact-1;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,0);now++;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,5);now=100550;w.snapshot(p.id,p.token);w.input(p.id,p.token,{sequence:2,x:0,y:0,attack:true});now+=COMBAT[cls].contact;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,10);now+=2000;Object.assign(p,{x:1440,y:850});w.snapshot(p.id,p.token);assert.equal(p.floor,0);
 });
