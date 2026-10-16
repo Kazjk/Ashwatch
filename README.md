@@ -1,18 +1,27 @@
-# Ashwatch — public playtest
+# Ashwatch — wild frontier playtest
 
-Play: https://ashwatch-playtest.onrender.com/ashwatch
+A browser-based, third-person 3D medieval/magical survival slice inspired by Rust's gather → craft → build → survive rhythm.
 
-A third-person 3D cooperative frontier combat game for 1–5 players. Create a company, share its six-character code, practise, then start the live watch together. No player account or installation is needed in a browser.
+- Wild frontier: https://ashwatch-playtest.onrender.com/ashwatch/frontier
+- Company watch (the established five-class cooperative encounters): https://ashwatch-playtest.onrender.com/ashwatch
 
-Five classes, three encounters and three company oaths support a short run and replay. Facing controls what the server permits each player to perceive. Teammates exchange relative cover calls. Read visible enemy movement, commit a strike, escape and cover each other. Enemy warning rings and countdowns are intentionally absent.
+The frontier adds actual rolling terrain, a river, oak woodland, photographed CC0 ground/bark/rock materials and an HDR sky. Harvest fallen timber, stone, herbs and aether at server-confirmed contact. Make a hatchet, food, hearth, timber floor, walls, an operable doorway, roof, bedroll and magical ward. Food, water and warmth change through the day/night cycle. A friendly hearth restores warmth and health; a bedroll changes the actual respawn point.
 
-## Playtest changes
+The map is a compact playable slice, not a Rust-sized open world. Characters and buildings still use original code-built meshes. There is no raiding, structural damage, destruction, full weather, large inventory, terrain editing or durable public persistence. Rust's assets are not included. Visual fidelity is still far below Rust and no award/competition-readiness claim is made.
 
-Practice attacks now reduce the scout's actual health at server-confirmed contact. Damaged enemies show an overhead bar and numerical health while visible. The practice scout resets 1.5 seconds after defeat. Players take no damage or resource cost in practice. Starting the live watch restores everyone and the first encounter.
+## Play
+
+Create a room, share its six-character code and have friends select Join friends by code on the same page. No player login or installation is needed. Frontier and company watch have separate browser session keys, so opening the frontier does not discard an existing company character.
+
+WASD/arrows move relative to the camera. Right drag, Q/R or touch look turns the character and following camera. Click/J/1 strikes; hold to repeat. F faces a visible enemy. Space dashes. G calls for cover. K/2 uses your class skill. In the company watch, E also uses the class skill.
+
+In the frontier, E faces the nearest already-visible resource; move closer and press E or hold Strike to gather. E also drinks beside the river and opens/closes a nearby company doorway. B opens the satchel. Choose a building, face clear ground and click Place (or the world). R rotates the plan; Escape cancels. A roof requires a timber floor beneath it. The outline is a plan; the server checks terrain, obstacles, materials, ownership, range and occupancy before building. Menus stop your controls while the shared world continues.
+
+Menu contains persistent sensitivity, camera, volume, graphics and reduced-motion settings. Auto graphics reduces vegetation/terrain detail on narrow screens.
 
 ## Run locally
 
-Use Node.js 24.21.0. From this directory:
+Use Node.js 24.21.0:
 
 ```sh
 npm ci
@@ -23,28 +32,24 @@ npm run build
 npm start -- --hostname 0.0.0.0
 ```
 
-Open http://localhost:3000/ashwatch. The Windows helper `./start-playtest.ps1` also runs the checks and opens a server on port 3011.
+Open http://localhost:3000/ashwatch/frontier. The Windows helper `./start-playtest.ps1` runs the checks and opens port 3011. To run the reproducible two-client survival check against a running server:
 
-After an interrupted response, snapshots/resume/input can retry once with the same input sequence. Tests verify this cannot duplicate damage or resource costs. Uncertain entry, start, replay, leave and purchases are never repeated automatically. A confirmed hit now gives one damped recoil rather than a rapid wobble; reduced motion suppresses it.
+```sh
+ASHWATCH_URL=http://127.0.0.1:3000 node scripts/frontier-smoke.mjs
+```
 
-Clicks on an admitted character now aim at that body, rather than the ground behind its head. Opaque scenery blocks this selection; hidden retained meshes and health bars cannot be selected. The server still controls facing permission, reach and damage. Five original cape crests and matching interface glyphs identify each role.
+In PowerShell set `$env:ASHWATCH_URL` before running the script. It creates disposable test characters, harvests real resources, crafts, builds a hearth/bedroll, checks private satchels/shared structures, retries/duplicates, reconnect and forged credentials, then leaves. It cannot establish game feel, audio quality or physical-device compatibility.
 
-## Controls
+## Multiplayer and hosting limits
 
-WASD/arrows move. Right mouse drag, Q/R, touch look or the right controller stick turn the character and following camera. F faces an already visible threat. J/1/left click strikes; hold to repeat. E/K/2 uses the class skill; Space dashes. Release Strike to backstep or dash while retaining combat facing briefly. H faces an injured visible teammate. G calls for cover. Menu contains persistent sensitivity, camera, volume, graphics and reduced-motion settings.
+Damage, timing, gathering, satchels, needs, structures, doors and respawn are server-authoritative. Snapshots omit unseen enemies/resources/structures. Walls, houses, tree trunks and terrain crests obstruct sight; opaque walls obstruct combat. Nearby teammate calls are recipient-relative. Client camera height never grants server visibility.
 
-## Free hosting
+Snapshots/resume/input can retry once with the same input sequence. Entry, crafting purchases outside input, start, replay and leave are never repeated automatically. Meaningful tests cover lost-contact responses without duplicate costs/damage. Rooms are isolated and expire after 20 minutes without an active company. Local checkpoint files can recover a restart when the files remain available.
 
-Deploy this repository as one long-lived Node web service. Build: `npm ci && npm run build`. Start: `npm start -- --hostname 0.0.0.0 --port $PORT`. Pin NODE_VERSION to 24.21.0. Set NEXT_PUBLIC_ASHWATCH_HOSTING=free before building to show the temporary-host room-reset notice in the game. ASHWATCH_SAVE_DIR may specify a private writable checkpoint directory; never place it under public/ or commit it.
+**The Render free playtest sleeps after 15 idle minutes and can take about a minute to wake. Its filesystem is ephemeral: rooms, gathered materials and buildings reset after sleep, restart or redeploy. This is not durable release hosting.** Rejoining credentials in browser storage alone cannot restore deleted server data. No paid service was added.
 
-The free Render service is a temporary public playtest. It sleeps after 15 idle minutes and may take about a minute to wake. Rooms and progress are lost when its ephemeral filesystem resets on sleep, restart or redeploy. It does not provide durable accounts or save storage. Create a new company if an old code expires. A persistent host/storage decision remains a separate release gate. See https://render.com/docs/free for current limits. No paid service is required for this playtest.
+## Credits and evidence
 
-## Verification and limits
+See ASSET_SOURCES.md and the material PROVENANCE.json for all sources, licenses and checksums. Original code-built art and procedural sound are retained. The frontier uses free CC0 Poly Haven materials/sky and no Rust assets.
 
-181 tests, type checking, lint and production build passed before publication. All five classes, party sizes 1–5 and three oaths completed 27 deterministic authenticated runs/replays. The production two-client test won in 70.292 seconds, answered four cover calls, interrupted six attacks and verified shared replay, host permissions and forged-token rejection. These checks verify behavior, not enjoyable balance.
-
-Native browser automation confirmed practice damage and shrinking health bars. Earlier two-browser native input completed a full Ironbound/Warden victory and shared replay on the preceding milestone. There is no two-human verdict yet. Audio has not been listened to; physical phones, controllers and captured mouse look remain unverified. A small-screen CSS layout check is not device testing. An unattributed initial-iframe MutationObserver error remains under investigation. Award quality and competition eligibility are not established.
-
-## Assets and isolation
-
-See ASSET_SOURCES.md and docs/CREDITS.md for original code-built art, procedural audio, generated slate and supplied texture provenance. This is the standalone Ashwatch game. No JARVIS application, private company checkpoint, player credential or local working report is included.
+Automated tests, real protocol clients and direct browser inspection are separate evidence. Audio has not been listened to, physical devices have not been tested and representative human co-op feedback is still outstanding. Competition eligibility, the signed-in mission/Code of Conduct, generated-asset acceptance and the entrant's final submission remain user review gates.

@@ -28,6 +28,6 @@ export class RoomStorage {
    mkdirSync(path.dirname(this.file),{recursive:true,mode:0o700});
    const envelope={version:1,checksum:createHash("sha256").update(payload).digest("hex"),payload};
    writeFileSync(this.file+".tmp",JSON.stringify(envelope),{mode:0o600});renameSync(this.file+".tmp",this.file);
-  }catch(error){throw Error("Company storage is unavailable. Please retry after storage is restored.",{cause:error});}
+  }catch(error){this.lastAttempt=0;throw Error("Company storage is unavailable. Please retry after storage is restored.",{cause:error});}
  }
 }

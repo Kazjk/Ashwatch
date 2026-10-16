@@ -3,7 +3,7 @@ import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js"
 import {mergeGeometries} from "three/addons/utils/BufferGeometryUtils.js";
 import {combatPose,enemyMotion,type CombatAction} from "./combat.ts";
 import type {ClassName} from "./progression.ts";
-type Appearance={weapon?:string;hair?:string;accessory?:string;faction?:"ashen"};
+type Appearance={frontier?:boolean;weapon?:string;hair?:string;accessory?:string;faction?:"ashen"};
 export {PHYSIQUE} from "./adventurer.ts";
 import {PHYSIQUE} from "./adventurer.ts";
 
@@ -13,14 +13,15 @@ export function adventurer(cls:ClassName,appearance:Appearance={},preview=false)
  const physique=PHYSIQUE[cls];body.scale.set(physique.width,physique.height,physique.depth);
  const geometries:THREE.BufferGeometry[]=[],materials:THREE.Material[]=[],pivots:THREE.Group[]=[body];
  const tank=cls==="Ironbound",rogue=cls==="Rogue",mage=cls==="Spellweaver",warden=cls==="Warden",caster=mage||warden,armored=tank||cls==="Knight";
+ const grounded=!!appearance.frontier;
  const ashen=appearance.faction==="ashen";
- const mat=(color:string,glow=false)=>{const m=new THREE.MeshStandardMaterial({color,roughness:.82,metalness:0,flatShading:true,...(glow?{emissive:color,emissiveIntensity:.65}:{})});materials.push(m);return m;};
+ const mat=(color:string,glow=false)=>{const m=new THREE.MeshStandardMaterial({color,roughness:.82,metalness:0,flatShading:!grounded,...(glow?{emissive:color,emissiveIntensity:.65}:{})});materials.push(m);return m;};
  const ink=mat(ashen?"#271f29":"#152936"),cloth=mat(ashen?"#713b43":{Knight:"#9f3948",Spellweaver:"#244b78",Ironbound:"#2c424f",Rogue:"#4f3664",Warden:"#236651"}[cls]);
  const clothLight=mat(ashen?"#b86c55":{Knight:"#d15c59",Spellweaver:"#5b86aa",Ironbound:"#526672",Rogue:"#896a9d",Warden:"#5e9e7a"}[cls]);
- const steel=mat(ashen?"#ad8171":tank?"#586d7b":"#93b4c4"),ivory=mat("#ece0ba"),gold=mat(ashen?"#d7ab72":"#d7aa53"),leather=mat("#453135"),skin=mat("#dfad91"),hair=mat(appearance.hair==="silver-hair"||mage?"#cbd9df":warden?"#b36b3e":"#293039"),light=mat(ashen?"#ffad62":mage?"#92e3f7":warden?"#baf5bd":"#ffe19c",true);
+ const steel=mat(ashen?"#ad8171":grounded?"#969b9b":tank?"#586d7b":"#93b4c4"),ivory=mat("#ece0ba"),gold=mat(ashen?"#d7ab72":grounded?"#9b8355":"#d7aa53"),leather=mat("#453135"),skin=mat("#dfad91"),hair=mat(appearance.hair==="silver-hair"||mage?"#cbd9df":warden?"#b36b3e":"#293039"),light=mat(ashen?"#ffad62":mage?"#92e3f7":warden?"#baf5bd":"#ffe19c",true);
  // Original woven cloth texture; small enough to keep mobile memory bounded.
  const weaveCanvas=document.createElement("canvas");weaveCanvas.width=weaveCanvas.height=64;const weaveContext=weaveCanvas.getContext("2d")!;weaveContext.fillStyle="#e1e1e1";weaveContext.fillRect(0,0,64,64);for(let i=0;i<64;i++){weaveContext.fillStyle=i%2?"#cacaca":"#ededed";weaveContext.fillRect(i,0,1,64);weaveContext.fillStyle="rgba(50,50,50,.10)";weaveContext.fillRect(0,i,64,1);}const weave=new THREE.CanvasTexture(weaveCanvas);weave.wrapS=weave.wrapT=THREE.RepeatWrapping;weave.repeat.set(4,4);weave.colorSpace=THREE.SRGBColorSpace;
- steel.metalness=.62;steel.roughness=.29;gold.metalness=.68;gold.roughness=.34;cloth.map=weave;clothLight.map=weave;
+ steel.metalness=grounded?.82:.62;steel.roughness=grounded?.45:.29;gold.metalness=.68;gold.roughness=.34;cloth.map=weave;clothLight.map=weave;if(grounded){steel.roughnessMap=weave;cloth.roughnessMap=weave;cloth.roughness=.98;clothLight.roughness=.98;}
  function mesh(p:THREE.Object3D,g:THREE.BufferGeometry,m:THREE.Material,x=0,y=0,z=0){geometries.push(g);const a=new THREE.Mesh(g,m);a.position.set(x,y,z);a.castShadow=true;a.receiveShadow=true;p.add(a);return a;}
  function box(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){return mesh(p,new RoundedBoxGeometry(w,h,d,1,Math.min(.025,w/6,h/6,d/6)),m,x,y,z);}
  function oval(p:THREE.Object3D,m:THREE.Material,x:number,y:number,z:number,w:number,h:number,d:number){const a=mesh(p,new THREE.SphereGeometry(1,14,10),m,x,y,z);a.scale.set(w,h,d);return a;}

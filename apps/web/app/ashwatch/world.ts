@@ -5,6 +5,8 @@ import {OATHS,type OathId} from "./oaths.ts";
 import {CLASSES,ITEMS,ATTRIBUTES,newGrowth,type ClassName,type Growth,type Attribute} from "./progression.ts";
 import {beginAction,combatStage,COMBAT,OPENING_DAMAGE,inBackArc,type CombatAction} from "./combat.ts";
 import {MIN_TRAVEL,dashVector} from "./input-motion.ts";
+import {FrontierState,validateFrontierCommand,type FrontierCommand,type FrontierView} from "./frontier.ts";
+import {inRiver,riverCenter,trunkBlocked} from "./frontier-land.ts";
 export type HeroClass = ClassName;
 
 export type Point = { x: number; y: number };
@@ -23,7 +25,7 @@ export type Effect = Point & { id: number; floor: number; kind: "guard" | "cresc
 
 export type Watch=WatchJournal & {covers:number;oath:OathId;parries:number;cleanses:number;evades:number;interrupts:number;healing:number;stage:number;state:"forming"|"active"|"victory"|"defeat";startedAt:number;endedAt:number;hitsTaken:number;warnings:number};
 export type Warning={name:string;relative:"ahead"|"left"|"right"|"behind";at:number;answeredBy?:string};
-export type WorldView = { inputSequence:number;rehearsal?:Rehearsal;ownCall?:{at:number;answeredBy?:string};hostId?:string;company?:{id:string;name:string;heroClass:HeroClass;online:boolean}[]; watch:Watch|null;warnings:Warning[]; selfId: string; time: number; heroes: Hero[]; monsters: MonsterView[]; dragon: DragonView | null; effects: Effect[]; cleared: number[]; villageDamage: number; population: number; floorRemaining: number; partyMembers: {id:string;x:number;y:number;floor:number}[] };
+export type WorldView = { inputSequence:number;frontier?:FrontierView;rehearsal?:Rehearsal;ownCall?:{at:number;answeredBy?:string};hostId?:string;company?:{id:string;name:string;heroClass:HeroClass;online:boolean}[]; watch:Watch|null;warnings:Warning[]; selfId: string; time: number; heroes: Hero[]; monsters: MonsterView[]; dragon: DragonView | null; effects: Effect[]; cleared: number[]; villageDamage: number; population: number; floorRemaining: number; partyMembers: {id:string;x:number;y:number;floor:number}[] };
 
 export const bossPhase=(m:Pick<Monster,"kind"|"hp"|"maxHp">)=>m.kind!=="boss"?0:m.hp/m.maxHp>2/3?1:m.hp/m.maxHp>1/3?2:3;
 export const strikeRadius=(m:Pick<Monster,"kind"|"attackKind">)=>m.attackKind==="sweep"?145:m.kind==="boss"?110:58;
@@ -81,7 +83,7 @@ const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n
 
 type PrivateHero = Hero & { token: string; seq: number; lastSeen: number; inputAt:number; input: Point; nextAttack: number; nextSkill: number; nextDodge: number; dodgeX:number; dodgeY:number; explored: Set<string>; };
 
-export type Input = { sequence: number; x: number; y: number; facing?: number; attack?: boolean; skill?: boolean; dodge?: boolean; interact?: boolean; warn?:boolean; service?: "mission"|"claim"|"rest"|"party"; partyCode?:string };
+export type Input = { frontier?:FrontierCommand;sequence: number; x: number; y: number; facing?: number; attack?: boolean; skill?: boolean; dodge?: boolean; interact?: boolean; warn?:boolean; service?: "mission"|"claim"|"rest"|"party"; partyCode?:string };
 
 export class LivingWorld {
 
@@ -98,6 +100,8 @@ export class LivingWorld {
 
   dragon: Dragon = { ...NEST, state: "sleeping", hp: 28000, maxHp: 28000, kills: 0, facing: 2, attackAt: 0, nextAttack: 0, tx: 0, ty: 0, defeatedAt: 0 };
 
+  frontier:FrontierState|null=null;
+  configureFrontier(){this.frontier=new FrontierState(this.clock(),p=>buildingContains(p,0));}
   watch:Watch|null=null;
   private callouts:{caller:string;at:number;coveredBy?:string}[]=[];
   private warningCooldown=new Map<string,number>();
@@ -207,6 +211,7 @@ export class LivingWorld {
       seq: -1, lastSeen: now, inputAt:now, input: { x: 0, y: 0 }, nextAttack: 0, nextSkill: 0, nextDodge: 0, dodgeX:0,dodgeY:0,explored: new Set() });
 
     if(this.watch){const oldScale=1+Math.max(0,this.heroes.size-2)*.85,newScale=1+Math.max(0,this.heroes.size-1)*.85;for(const enemy of this.monsters){enemy.hp*=newScale/oldScale;enemy.maxHp*=newScale/oldScale;}const p=this.heroes.get(id)!;p.floor=1;p.x=1200+(this.heroes.size-1)*32;p.y=1550;p.facing=-Math.PI/2;p.awareness=20+OATHS[this.watch.oath].awareness;p.maxHp=Math.round(p.maxHp*OATHS[this.watch.oath].health);p.hp=p.maxHp;p.weapon=p.heroClass==="Spellweaver"||p.heroClass==="Warden"?"watch-focus":"watch-sword";}
+    if(this.frontier){const p=this.heroes.get(id)!;p.weapon=p.heroClass==="Spellweaver"||p.heroClass==="Warden"?"focus":"sword";p.inventory=[p.weapon];p.gold=0;p.awareness=20;p.facing=Math.atan2(1480-p.y,955-p.x);}
     return { id, token };
 
   }
@@ -233,6 +238,7 @@ export class LivingWorld {
 
     if ([input.attack,input.skill,input.dodge,input.interact,input.warn].some(value=>value!==undefined&&typeof value!=="boolean")) throw Error("INVALID_INPUT");
 
+    const frontierCommand=input.frontier===undefined?undefined:validateFrontierCommand(input.frontier);if(frontierCommand&&!this.frontier)throw Error("Choose the wild frontier first.");
     if(input.sequence<=p.seq){p.lastSeen=this.clock();return this.view(p);}
     p.seq = input.sequence; p.lastSeen = p.inputAt = this.clock();
 
@@ -254,11 +260,17 @@ export class LivingWorld {
       p.dodgeUntil=this.clock()+360;p.nextDodge=this.clock()+2200;
     }
 
+    if(frontierCommand&&this.frontier){try{this.frontier.command(p,frontierCommand,this.clock(),q=>this.visible(p,q)&&faces(p,q),q=>buildingContains(q,35)||trunkBlocked(q.x,q.y,35),q=>[...this.heroes.values()].some(h=>h.floor===0&&h.hp>0&&distance(h,q)<30));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"That craft could not be completed.",this.clock());}}
     if(input.service)this.service(p,input);
     if (input.skill) this.attack(p, true);
     if (input.attack && !p.action) this.attack(p, false);
 
-    if (input.interact) this.portal(p);
+    if(input.interact&&this.frontier&&!p.floor){
+      const door=this.frontier.structures.find(s=>s.kind==="door"&&distance(p,s)<85&&this.visible(p,s)&&faces(p,s));
+      if(door){try{this.frontier.command(p,{kind:"use",id:door.id},this.clock(),q=>canSee(p,q)&&faces(p,q),q=>buildingContains(q),q=>[...this.heroes.values()].some(h=>h.floor===0&&h.hp>0&&distance(h,q)<30));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"Step clear first.",this.clock());}}
+      else if(Math.abs(p.x-riverCenter(p.y))<75)this.frontier.drink(p,this.clock());
+      else if(!p.action)this.attack(p,false);
+    }else if (input.interact) this.portal(p);
 
     return this.view(p);
 
@@ -267,7 +279,7 @@ export class LivingWorld {
   snapshot(id: string, token: string) { const p = this.authenticate(id, token); this.advance(); p.lastSeen = this.clock(); return this.view(p); }
 
   // Private server checkpoint. Never expose this through a recipient snapshot.
-  checkpoint(){return {savedAt:this.clock(),heroes:[...this.heroes.values()].map(p=>({...p,explored:[...p.explored]})),monsters:this.monsters.map(e=>({...e})),dragon:{...this.dragon},watch:this.watch?structuredClone(this.watch):null,cleared:[...this.cleared],villageDamage:this.villageDamage,effectId:this.effectId,callouts:this.callouts.map(c=>({...c})),warningCooldown:[...this.warningCooldown],threatened:[...this.threatened],rehearsals:[...this.rehearsals],chapterBase:{...this.chapterBase}};}
+  checkpoint(){return {frontier:this.frontier?.checkpoint()??null,savedAt:this.clock(),heroes:[...this.heroes.values()].map(p=>({...p,explored:[...p.explored]})),monsters:this.monsters.map(e=>({...e})),dragon:{...this.dragon},watch:this.watch?structuredClone(this.watch):null,cleared:[...this.cleared],villageDamage:this.villageDamage,effectId:this.effectId,callouts:this.callouts.map(c=>({...c})),warningCooldown:[...this.warningCooldown],threatened:[...this.threatened],rehearsals:[...this.rehearsals],chapterBase:{...this.chapterBase}};}
   restore(saved:ReturnType<LivingWorld["checkpoint"]>){
     const now=this.clock(),delta=Math.max(0,now-saved.savedAt),shift=(n:number|undefined)=>n?n+delta:0;
     if(!Number.isFinite(saved.savedAt)||!Array.isArray(saved.heroes)||saved.heroes.length>32||!Array.isArray(saved.monsters)||saved.monsters.length>256)throw Error("Invalid room checkpoint");
@@ -282,6 +294,7 @@ export class LivingWorld {
     this.monsters=saved.monsters.map(row=>{const e={...row};for(const key of ["attackAt","nextAttack","deadAt","recoveryUntil","lastContactAt","slowUntil"] as const)e[key]=shift(e[key]);return e;});
     this.dragon={...saved.dragon};for(const key of ["attackAt","nextAttack","defeatedAt"] as const)this.dragon[key]=shift(this.dragon[key]);
     this.watch=saved.watch?structuredClone(saved.watch):null;if(this.watch)for(const key of ["startedAt","endedAt","stageStartedAt","regroupUntil"] as const)this.watch[key]=shift(this.watch[key]);
+    this.frontier=null;if(saved.frontier){this.frontier=new FrontierState(now);this.frontier.restore(saved.frontier,delta);}
     this.cleared=new Set(saved.cleared);this.villageDamage=saved.villageDamage;this.effectId=saved.effectId;this.effects=[];
     this.callouts=saved.callouts.map(c=>({...c,at:shift(c.at)}));this.warningCooldown=new Map(saved.warningCooldown.map(([id,at])=>[id,shift(at)]));this.threatened=new Map(saved.threatened);this.rehearsals=new Map(saved.rehearsals);this.chapterBase={...saved.chapterBase};this.detours.clear();this.last=now;
   }
@@ -317,12 +330,13 @@ export class LivingWorld {
 
       if (p.hp <= 0) {
 
-        if (!this.watch && p.respawnAt <= now) { p.floor = 0; const inn=TOWNS.find(t=>t.id===p.lodge)!.inn;p.x=inn.x;p.y=buildingEntrance(inn).y; p.hp = p.maxHp; p.mp = p.maxMp; p.stamina = p.maxStamina; p.dodgeUntil = now + 8000; p.input = { x: 0, y: 0 }; }
+        if (!this.watch && p.respawnAt <= now) { p.floor = 0; const inn=TOWNS.find(t=>t.id===p.lodge)!.inn;p.x=inn.x;p.y=buildingEntrance(inn).y; p.hp = p.maxHp; p.mp = p.maxMp; p.stamina = p.maxStamina; p.dodgeUntil = now + 8000; p.input = { x: 0, y: 0 };this.frontier?.respawn(p); }
 
         continue;
 
       }
 
+      if(this.frontier&&!p.floor)this.frontier.tick(p,dt,now,inRiver(p.x,p.y));
       p.mp=Math.min(p.maxMp,p.mp+dt*4);
 
       p.stamina=Math.min(p.maxStamina,p.stamina+dt*(now-p.attackAt>800?18:3));
@@ -332,11 +346,11 @@ export class LivingWorld {
       const dodging=p.dodgeAt>0 && now-p.dodgeAt<360;
       p.moving = dodging || active && Math.hypot(p.input.x, p.input.y) > MIN_TRAVEL;
 
-      const speed = dodging ? CLASSES[p.heroClass].dash + p.agility*18 : 155*((p.webUntil??0)>now?.65:1)*(this.watch?OATHS[this.watch.oath].speed:1)*(p.action?(p.action.stage==="intent"?1:p.action.stage==="recovery"?.75:.45):1);const mx=dodging?p.dodgeX:p.input.x,my=dodging?p.dodgeY:p.input.y;
+      const speed = dodging ? CLASSES[p.heroClass].dash + p.agility*18 : 155*(this.frontier&&!p.floor&&inRiver(p.x,p.y)?.68:1)*((p.webUntil??0)>now?.65:1)*(this.watch?OATHS[this.watch.oath].speed:1)*(p.action?(p.action.stage==="intent"?1:p.action.stage==="recovery"?.75:.45):1);const mx=dodging?p.dodgeX:p.input.x,my=dodging?p.dodgeY:p.input.y;
 
       if (p.moving) {
 
-        const blocked=(x:number,y:number)=>this.watch?watchBlocked({x,y}):!p.floor&&buildingContains({x,y});
+        const blocked=(x:number,y:number)=>this.watch?watchBlocked({x,y}):!p.floor&&(buildingContains({x,y})||!!this.frontier?.blocked(x,y));
 
         const nx=clamp(p.x+mx*speed*dt,p.floor?675:60,p.floor?1725:2340);
 
@@ -398,7 +412,7 @@ export class LivingWorld {
           if(this.watch&&e.attackPhase===3&&e.attackKind!=="sweep"&&!watchObstacle(e,{x:e.tx,y:e.ty},20)){e.x=e.tx;e.y=e.ty;}
           this.effect(e.tx,e.ty,e.floor,"hit",now,0);
 
-          for (const p of targets) {const before=p.hp;if(distance(p,{x:e.tx,y:e.ty}) < radius&&(!this.watch||watchLineClear(e,p))&&this.hurt(p,(this.watch&&e.kind==="boss"?32:9+e.level*3)*(this.watch&&e.attackPhase===3?1.25:1),now,e)&&e.kind==="sentinel")p.webUntil=now+2000;if(this.watch&&this.threatened.get(e.id)?.includes(p.id)&&p.hp===before)this.watch.evades++;}
+          for (const p of targets) {const before=p.hp;if(distance(p,{x:e.tx,y:e.ty}) < radius&&(!this.watch||watchLineClear(e,p))&&(!this.frontier||e.floor>0||this.frontier.lineClear(e,p))&&this.hurt(p,(this.watch&&e.kind==="boss"?32:9+e.level*3)*(this.watch&&e.attackPhase===3?1.25:1),now,e)&&e.kind==="sentinel")p.webUntil=now+2000;if(this.watch&&this.threatened.get(e.id)?.includes(p.id)&&p.hp===before)this.watch.evades++;}
           this.threatened.delete(e.id);
 
           e.lastContactAt=now; e.attackAt = 0; e.recoveryUntil=now+(e.kind==="boss"?(this.watch?1400:950):650); e.nextAttack = now + Math.max(800,2000 - e.level * 45);
@@ -418,7 +432,7 @@ export class LivingWorld {
           this.detours.set(e.id,path);const goal=path[0]??target;
           const direction=Math.atan2(goal.y-e.y,goal.x-e.x),speed=(45+e.level*2.4)*((e.slowUntil??0)>now?.45:1),travel=Math.min(speed*dt,distance(e,goal));
           const next={x:e.x+Math.cos(direction)*travel,y:e.y+Math.sin(direction)*travel};
-          if(!this.watch||!watchObstacle(e,next,padding)){e.x=next.x;e.y=next.y;}
+          if((!this.watch||!watchObstacle(e,next,padding))&&(!this.frontier||e.floor>0||!this.frontier.blocked(next.x,next.y))){e.x=next.x;e.y=next.y;}
         }
         else if (now >= e.nextAttack) { const phase=this.watch?bossPhase(e):0;e.attackPhase=phase;e.attackKind=phase>=2&&(e.attackCount??0)%2===0?"sweep":"strike";e.attackCount=(e.attackCount??0)+1;e.tx=e.attackKind==="sweep"?e.x:target.x;e.ty=e.attackKind==="sweep"?e.y:target.y;e.attackAt=now+(e.kind === "boss" ? 1400 : 1050);e.lastContactAt=0;e.recoveryUntil=0;this.threatened.set(e.id,targets.filter(p=>distance(p,{x:e.tx,y:e.ty})<strikeRadius(e)).map(p=>p.id)); }
 
@@ -576,11 +590,11 @@ export class LivingWorld {
     }
 
 
-    if(skill&&(p.equippedSkill==="Renew"||p.heroClass==="Ironbound")) {if(p.heroClass==="Ironbound"){p.action.hit=true;this.effect(p.x,p.y,p.floor,"ward",now,p.facing);}for(const ally of this.heroes.values())if(ally.hp>0&&ally.floor===p.floor&&now-ally.lastSeen<2000&&(ally.id===p.id||p.equippedSkill==="Renew"&&p.party&&ally.party===p.party&&distance(p,ally)<160&&canSee(p,ally)&&faces(p,ally)&&(!this.watch||watchLineClear(p,ally)))){if(p.equippedSkill==="Renew"&&(ally.webUntil??0)>now){ally.webUntil=0;p.action.hit=true;if(this.watch)this.watch.cleanses++;this.cover(p,[ally.id],now);this.effect(ally.x,ally.y,ally.floor,"cleanse",now,0,undefined,{x:p.x,y:p.y});}const restored=Math.min(ally.maxHp-ally.hp,p.heroClass==="Ironbound"?24+p.level*2:65+p.level*6);ally.hp+=restored;if(restored>0){p.action.hit=true;if(this.watch)this.watch.healing+=restored;this.cover(p,[ally.id],now);this.effect(ally.x,ally.y,ally.floor,"heal",now,0,restored,{x:p.x,y:p.y});}}return;}
+    if(skill&&(p.equippedSkill==="Renew"||p.heroClass==="Ironbound")) {if(p.heroClass==="Ironbound"){p.action.hit=true;this.effect(p.x,p.y,p.floor,"ward",now,p.facing);}for(const ally of this.heroes.values())if(ally.hp>0&&ally.floor===p.floor&&now-ally.lastSeen<2000&&(ally.id===p.id||p.equippedSkill==="Renew"&&p.party&&ally.party===p.party&&distance(p,ally)<160&&canSee(p,ally)&&faces(p,ally)&&(!this.watch||watchLineClear(p,ally))&&(!this.frontier||p.floor>0||this.frontier.lineClear(p,ally)))){if(p.equippedSkill==="Renew"&&(ally.webUntil??0)>now){ally.webUntil=0;p.action.hit=true;if(this.watch)this.watch.cleanses++;this.cover(p,[ally.id],now);this.effect(ally.x,ally.y,ally.floor,"cleanse",now,0,undefined,{x:p.x,y:p.y});}const restored=Math.min(ally.maxHp-ally.hp,p.heroClass==="Ironbound"?24+p.level*2:65+p.level*6);ally.hp+=restored;if(restored>0){p.action.hit=true;if(this.watch)this.watch.healing+=restored;this.cover(p,[ally.id],now);this.effect(ally.x,ally.y,ally.floor,"heal",now,0,restored,{x:p.x,y:p.y});}}return;}
 
     const range=caster? (skill?230:COMBAT[p.heroClass].reach):skill?95:COMBAT[p.heroClass].reach;
 
-    const clearHit=(target:Point)=>this.watch?watchLineClear(p,target):p.floor>0||!Array.from({length:6},(_,i)=>(i+1)/7).some(t=>buildingContains({x:p.x+(target.x-p.x)*t,y:p.y+(target.y-p.y)*t},0));
+    const clearHit=(target:Point)=>this.watch?watchLineClear(p,target):p.floor>0||(!this.frontier||this.frontier.lineClear(p,target))&&!Array.from({length:6},(_,i)=>(i+1)/7).some(t=>buildingContains({x:p.x+(target.x-p.x)*t,y:p.y+(target.y-p.y)*t},0));
     const monsters=this.monsters.filter(e=>e.floor===p.floor&&e.hp>0&&canSee(p,e)&&faces(p,e)&&clearHit(e)&&distance(p,e)<range);
 
     const rivals=this.watch?[]:[...this.heroes.values()].filter(q=>q.id!==p.id&&q.floor===p.floor&&q.hp>0&&now-q.lastSeen<2000&&!(p.party&&p.party===q.party)&&!safe(q)&&!safe(p)&&canSee(p,q)&&faces(p,q)&&clearHit(q)&&distance(p,q)<range);
@@ -589,7 +603,8 @@ export class LivingWorld {
 
     const targets=[...monsters,...rivals,...(dragon?[dragon]:[])].sort((a,b)=>distance(a,p)-distance(b,p));
 
-    if(!targets.length&&!p.floor){const protectedPerson=[...residents(now,this.dragon.state==="enraged"),...[...this.heroes.values()].filter(q=>q.id!==p.id&&q.floor===0&&(safe(q)||safe(p)))].find(q=>distance(p,q)<range&&canSee(p,q));if(protectedPerson)this.effect(protectedPerson.x,protectedPerson.y,0,"guard",now,0);}
+    if(!targets.length&&!p.floor){const protectedPerson=[...(this.frontier?[]:residents(now,this.dragon.state==="enraged")),...[...this.heroes.values()].filter(q=>q.id!==p.id&&q.floor===0&&(safe(q)||safe(p)))].find(q=>distance(p,q)<range&&canSee(p,q));if(protectedPerson)this.effect(protectedPerson.x,protectedPerson.y,0,"guard",now,0);}
+    if(!skill&&!targets.length&&this.frontier&&!p.floor){const node=this.frontier.gather(p,now,q=>canSee(p,q)&&faces(p,q)&&clearHit(q));if(node){p.action.hit=true;this.effect(node.x,node.y,0,"hit",now,p.facing);return;}}
     p.action.hit=targets.length>0;
     if(this.watch?.state==="active"){if(!targets.length)this.watch.misses++;else if((skill?targets:targets.slice(0,1)).some(t=>"recoveryUntil" in t&&!t.attackAt&&t.recoveryUntil>now)){p.action.opening=true;this.watch.openings++;}}
 
@@ -674,10 +689,11 @@ export class LivingWorld {
     }else throw Error("Unknown character action");
     return this.view(p);
   }
-  resume(id:string,token:string){const p=this.authenticate(id,token);const town=TOWNS.find(t=>t.id===p.lodge)??TOWNS[0];if(!this.watch){p.floor=0;p.x=town.inn.x;p.y=buildingEntrance(town.inn).y;}if(!this.watch)p.facing=-Math.PI*.85;p.input={x:0,y:0};p.inputAt=this.clock();if(!this.watch)p.action=null;p.lastSeen=this.clock();if(!this.watch){p.hp=p.maxHp;p.mp=p.maxMp;p.stamina=p.maxStamina;}return this.view(p);}
+  resume(id:string,token:string){const p=this.authenticate(id,token);const town=TOWNS.find(t=>t.id===p.lodge)??TOWNS[0];if(!this.watch&&!this.frontier){p.floor=0;p.x=town.inn.x;p.y=buildingEntrance(town.inn).y;}if(!this.watch&&!this.frontier)p.facing=-Math.PI*.85;p.input={x:0,y:0};p.inputAt=this.clock();if(!this.watch&&!this.frontier)p.action=null;p.lastSeen=this.clock();if(!this.watch&&!this.frontier){p.hp=p.maxHp;p.mp=p.maxMp;p.stamina=p.maxStamina;}return this.view(p);}
   saveProfiles(){return [...this.heroes.values()].map(p=>({...p,explored:[...p.explored]}));}
   loadProfiles(rows:ReturnType<LivingWorld["saveProfiles"]>){for(const row of rows){this.heroes.set(row.id,{...newGrowth(row.heroClass),...row,training:row.training??newGrowth(row.heroClass).training,action:null,input:{x:0,y:0},inputAt:0,lastSeen:0,explored:new Set(row.explored)});}}
   private portal(p:PrivateHero,automatic=false,now=this.clock()) {
+    if(this.frontier)return;
 
     if(p.hp<=0||p.portalCooldown>now)return;
 
@@ -707,7 +723,9 @@ export class LivingWorld {
 
   private publicHero(p:PrivateHero):Hero { const {dodgeAt,attackStyle,mission,missionKills,missionClaimed,lodge,party,id,name,heroClass,x,y,hp,maxHp,mp,maxMp,stamina,maxStamina,level,xp,awareness,floor,facing,kills,deaths,attackAt,dodgeUntil,respawnAt,portalCooldown,moving}=p;return {webUntil:p.webUntil??0,action:p.action?{...p.action,stage:combatStage(p.action,this.clock())}:null,gold:p.gold,abilityPoints:p.abilityPoints,strength:p.strength,agility:p.agility,intelligence:p.intelligence,training:{...p.training},weapon:p.weapon,hair:p.hair,accessory:p.accessory,equippedSkill:p.equippedSkill,inventory:[...p.inventory],dodgeAt,dodgeCooldown:Math.max(0,p.nextDodge-this.clock()),attackStyle,mission,missionKills,missionClaimed,lodge,party,id,name,heroClass,x,y,hp,maxHp,mp,maxMp,stamina,maxStamina,level,xp,awareness,floor,facing,kills,deaths,attackAt,dodgeUntil,respawnAt,portalCooldown,moving,cooldown:Math.max(0,p.nextAttack-this.clock()),skillCooldown:Math.max(0,p.nextSkill-this.clock())}; }
 
+  private visible(p:PrivateHero,q:Point){return canSee(p,q)&&(!this.frontier||p.floor>0||this.frontier.lineClear(p,q));}
   private view(p:PrivateHero):WorldView {return {
+    ...(this.frontier&&!p.floor?{frontier:this.frontier.view(p,this.clock(),q=>this.visible(p,q))}:{}),
 
 
     company:p.party?[...this.heroes.values()].filter(q=>q.party===p.party).map(q=>({id:q.id,name:q.name,heroClass:q.heroClass,online:this.clock()-q.lastSeen<15000})):[],
@@ -716,15 +734,15 @@ export class LivingWorld {
     ownCall:this.callouts.filter(c=>c.caller===p.id&&this.clock()-c.at<2800).map(c=>({at:c.at,answeredBy:c.coveredBy?this.heroes.get(c.coveredBy)?.name:undefined})).at(-1),
     warnings:this.callouts.filter(c=>this.clock()-c.at<2800&&c.caller!==p.id).flatMap(c=>{const ally=this.heroes.get(c.caller);if(!ally||!p.party||ally.party!==p.party||ally.floor!==p.floor)return [];const a=Math.atan2(Math.sin(Math.atan2(ally.y-p.y,ally.x-p.x)-p.facing),Math.cos(Math.atan2(ally.y-p.y,ally.x-p.x)-p.facing));return [{name:ally.name,at:c.at,answeredBy:c.coveredBy?this.heroes.get(c.coveredBy)?.name:undefined,relative:(Math.abs(a)>Math.PI*.75?"behind":Math.abs(a)<Math.PI*.25?"ahead":a<0?"left":"right") as Warning["relative"]}];}),
 
-    selfId:p.id,inputSequence:p.seq,time:this.clock(),heroes:[...this.heroes.values()].filter(q=>this.clock()-q.lastSeen<120000&&q.floor===p.floor&&(q.id===p.id||canSee(p,q))).map(q=>{const hero=this.publicHero(q);if(q.id!==p.id&&hero.action)delete hero.action.opening;return hero;}),
+    selfId:p.id,inputSequence:p.seq,time:this.clock(),heroes:[...this.heroes.values()].filter(q=>this.clock()-q.lastSeen<120000&&q.floor===p.floor&&(q.id===p.id||this.visible(p,q))).map(q=>{const hero=this.publicHero(q);if(q.id!==p.id&&hero.action)delete hero.action.opening;return hero;}),
 
-    monsters:this.monsters.filter(e=>e.floor===p.floor&&e.hp>0&&canSee(p,e)).map(e=>({id:e.id,x:e.x,y:e.y,kind:e.kind,floor:e.floor,level:e.level,hp:e.hp,maxHp:e.maxHp,attackAt:e.attackAt,lastContactAt:e.lastContactAt??0,deadAt:e.deadAt,facing:e.facing,recoveryUntil:e.recoveryUntil,slowUntil:e.slowUntil,attackKind:e.attackKind})),
+    monsters:this.monsters.filter(e=>e.floor===p.floor&&e.hp>0&&this.visible(p,e)).map(e=>({id:e.id,x:e.x,y:e.y,kind:e.kind,floor:e.floor,level:e.level,hp:e.hp,maxHp:e.maxHp,attackAt:e.attackAt,lastContactAt:e.lastContactAt??0,deadAt:e.deadAt,facing:e.facing,recoveryUntil:e.recoveryUntil,slowUntil:e.slowUntil,attackKind:e.attackKind})),
 
-    dragon:p.floor===0&&canSee(p,this.dragon)?{x:this.dragon.x,y:this.dragon.y,state:this.dragon.state,hp:this.dragon.hp,maxHp:this.dragon.maxHp,kills:this.dragon.kills,facing:this.dragon.facing,attackAt:this.dragon.attackAt,defeatedAt:this.dragon.defeatedAt}:null,
+    dragon:p.floor===0&&this.visible(p,this.dragon)?{x:this.dragon.x,y:this.dragon.y,state:this.dragon.state,hp:this.dragon.hp,maxHp:this.dragon.maxHp,kills:this.dragon.kills,facing:this.dragon.facing,attackAt:this.dragon.attackAt,defeatedAt:this.dragon.defeatedAt}:null,
 
-    effects:this.effects.filter(e=>e.floor===p.floor&&canSee(p,e)).map(e=>({...e,to:e.to&&canSee(p,e.to)?{...e.to}:undefined})),
+    effects:this.effects.filter(e=>e.floor===p.floor&&this.visible(p,e)).map(e=>({...e,to:e.to&&this.visible(p,e.to)?{...e.to}:undefined})),
 
-    cleared:[...this.cleared],villageDamage:p.floor===0&&canSee(p,VILLAGE)?this.villageDamage:0,population:[...this.heroes.values()].filter(q=>this.clock()-q.lastSeen<120000).length,
+    cleared:[...this.cleared],villageDamage:p.floor===0&&this.visible(p,VILLAGE)?this.villageDamage:0,population:[...this.heroes.values()].filter(q=>this.clock()-q.lastSeen<120000).length,
     partyMembers:p.party?[...this.heroes.values()].filter(q=>q.id!==p.id&&q.party===p.party&&this.clock()-q.lastSeen<120000).map(q=>({id:q.id,x:q.x,y:q.y,floor:q.floor})):[],
 
     floorRemaining:this.monsters.filter(e=>e.floor===p.floor&&e.hp>0).length

@@ -1,0 +1,17 @@
+"use client";
+import {RECIPES,frontierNight,type FrontierView,type FrontierCommand,type StructureKind,type Supplies} from "./frontier";
+
+export function canAfford(bag:Supplies,recipe:keyof typeof RECIPES){return Object.entries(RECIPES[recipe].cost).every(([key,n])=>bag[key as keyof Supplies]>=n);}
+export function FrontierPanel({view,open,building,rotation,onToggle,onClose,onCraft,onPlan,onPlace,onRotate,onCancel}:{view:FrontierView;open:boolean;building:StructureKind|null;rotation:number;onToggle:()=>void;onClose:()=>void;onCraft:(command:FrontierCommand)=>void;onPlan:(piece:StructureKind)=>void;onPlace:()=>void;onRotate:()=>void;onCancel:()=>void}){
+ const night=frontierNight(view.day),goal=!view.hatchet?"Gather timber & stone · craft a hatchet":!view.milestones.includes("hearth")?"Raise a hearth · make a place to return to":!view.milestones.includes("bedroll")?"Place a bedroll · bind your return point":"Your foothold is established · explore the frontier";
+ return <>
+  <aside className="frontier-vitals" aria-label="Survival needs"><span>{night?"Nightfall":"Daylight"} · {view.sheltered?"At your hearth":"In the wilds"}</span><div><b>Food {Math.ceil(view.hunger)}</b><b>Water {Math.ceil(view.thirst)}</b><b>Warmth {Math.ceil(view.warmth)}</b></div><p>{goal}</p><button onClick={onToggle}>B · Satchel & building</button></aside>
+  <div className="frontier-supplies" aria-label="Your materials">{Object.entries(view.supplies).map(([key,n])=><span key={key}><b>{n}</b> {key}</span>)}{view.hatchet&&<em>Stone hatchet</em>}</div>
+  {view.message&&<p className="frontier-message" role="status">{view.message}</p>}
+  {building&&<aside className="frontier-building" aria-label="Building plan"><b>{RECIPES[building].name} · {rotation*90}°</b><span>Face clear ground. The outline is a plan; placement is checked when you build.</span><div><button onClick={onPlace} disabled={!canAfford(view.supplies,building)}>Place · click ground</button><button onClick={onRotate}>R · Rotate</button><button onClick={onCancel}>Cancel · Esc</button></div></aside>}
+  {open&&<div className="overlay frontier-overlay"><section className="frontier-crafting" role="dialog" aria-modal="true" aria-label="Satchel and building"><button className="close" aria-label="Close satchel" onClick={onClose}>×</button><p className="overline">THE WILD FRONTIER</p><h2>Make a foothold.</h2><p>Strike fallen timber, stone, herbs or crystals to gather. Craft a hatchet for larger harvests. Place a hearth for warmth, floors and walls for a shelter, and a bedroll for your return point. Drink at the river with E.</p><div className="frontier-recipes">{Object.entries(RECIPES).map(([key,recipe])=>{
+   const id=key as keyof typeof RECIPES,crafted=id==="hatchet"&&view.hatchet,enabled=canAfford(view.supplies,id)&&!crafted&&(id!=="meal"||view.hunger<100);
+   return <button key={id} disabled={!enabled} onClick={()=>id==="hatchet"||id==="meal"?onCraft({kind:"craft",recipe:id}):onPlan(id)}><strong>{recipe.name}</strong><small>{Object.entries(recipe.cost).map(([item,n])=>`${n} ${item}`).join(" · ")}</small><span>{crafted?"Equipped":!canAfford(view.supplies,id)?"Gather materials":id==="meal"?"Eat · +40 food":id==="hatchet"?"Craft tool":"Plan building →"}</span></button>;
+  })}</div><small>Your satchel is private. Company structures and nearby harvests are shared. The world keeps moving while this satchel is open.</small></section></div>}
+ </>;
+}

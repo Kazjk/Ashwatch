@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {mkdtempSync,readFileSync,writeFileSync,rmSync} from "node:fs";
+import {mkdtempSync,readFileSync,writeFileSync,rmSync,mkdirSync,rmdirSync} from "node:fs";
 import {tmpdir} from "node:os";
 import path from "node:path";
 import {Rooms} from "../apps/web/app/ashwatch/rooms.ts";
@@ -28,4 +28,9 @@ test("corrupt or unsupported checkpoint is preserved and never silently overwrit
 
 test("restart does not extend an expired company or restore held movement",()=>temporary(dir=>{
  let now=100000;const old=new Rooms(()=>now),s=old.create("Leader","Knight","watch");old.get(s.room).world.input(s.id,s.token,{sequence:1,x:1,y:0});const storage=new RoomStorage(dir,()=>now);storage.save(old,true);now+=21*60*1000;const fresh=new Rooms(()=>now);new RoomStorage(dir,()=>now).load(fresh);assert.throws(()=>fresh.get(s.room),/not found/);
+}));
+
+
+test("an unsuccessful checkpoint cannot become a throttled success on immediate retry",()=>temporary(dir=>{
+ let now=100000;const rooms=new Rooms(()=>now);rooms.create("Storage retry","Knight","frontier");const storage=new RoomStorage(dir,()=>now);storage.save(rooms,true);now+=3000;mkdirSync(storage.file+".tmp");assert.throws(()=>storage.save(rooms,true),/unavailable/);assert.throws(()=>storage.save(rooms),/unavailable/);rmdirSync(storage.file+".tmp");assert.doesNotThrow(()=>storage.save(rooms));assert.doesNotThrow(()=>JSON.parse(readFileSync(storage.file,"utf8")));
 }));
