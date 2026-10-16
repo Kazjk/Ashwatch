@@ -8,3 +8,6 @@
 @media(max-height:500px) and (min-width:761px){.frontier-vitals{top:118px;width:210px;padding:8px}.frontier-vitals p{font-size:10px;margin:4px 0}.frontier-vitals>div{margin:5px 0}.frontier-building{top:118px;right:15px;width:230px;padding:9px}.frontier-message{bottom:58px}.frontier-resource{bottom:100px}.frontier-mode .target-readout{top:120px}.frontier-mode .desktop-controls-hint{display:none}}
 
 @media(max-width:760px){.frontier-message{left:12px;transform:none;width:210px;max-width:calc(100% - 154px)}}
+
+/* Unaffordable recipes remain readable: costs explain the next useful action. */
+.aw .frontier-recipes button:disabled{opacity:1;background:#172d2b;border-color:#61766a;color:#d9dfd0;cursor:not-allowed}.aw .frontier-recipes button:disabled small{color:#c9d4cb}.aw .frontier-recipes button:disabled span{color:#d3bc85}
