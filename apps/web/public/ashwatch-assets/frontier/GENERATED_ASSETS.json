@@ -1,0 +1,15 @@
+[
+  {
+    "file": "oak-branch-cutout-v1.png",
+    "created": "2026-10-16",
+    "tool": "built-in image_gen",
+    "role": "Original generated photographic oak spray alpha cutout",
+    "prompt": "docs/oak-foliage-prompt.txt",
+    "width": 1254,
+    "height": 1254,
+    "alpha": "verified min0 max255, not opaque",
+    "bytes": 1613635,
+    "sha256": "6d99085724d9d77850f954b3d3e1ba212d36f15d973749b0de0bd5ab01486d79",
+    "competitionAcceptance": "Not established; signed-in mission and Code of Conduct require entrant review."
+  }
+]

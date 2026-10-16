@@ -110,6 +110,28 @@ test("frontier cover calls acknowledge real help and cannot be answered by an in
  f.advance(6600);f.p.hp-=30;f.input({warn:true});f.w.input(ally.id,ally.token,{sequence:2,x:0,y:0,skill:true});f.advance(COMBAT.Warden.skillContact);const v=f.w.snapshot(f.s.id,f.s.token);assert.equal(f.p.hp,f.p.maxHp);assert.equal(v.ownCall?.answeredBy,"Frontier medic");assert.ok(v.effects.some(e=>e.kind==="cover"));
 });
 
+test("a complete paid shelter accepts joined corners, a roof above walls and a bedroll through its open door",()=>{
+ const f=fixture();f.farm("timber",80);f.farm("stone",30);f.farm("herb",4);const before=f.w.snapshot(f.s.id,f.s.token).frontier!.supplies;Object.assign(f.p,{x:950,y:1640,facing:Math.PI/2});
+ const parts=[{piece:"foundation",x:950,y:1750,rotation:0},{piece:"wall",x:950,y:1725,rotation:1},{piece:"wall",x:925,y:1750,rotation:0},{piece:"wall",x:975,y:1750,rotation:0},{piece:"door",x:950,y:1775,rotation:1},{piece:"roof",x:950,y:1750,rotation:0}] as const;
+ for(const part of parts){if(part.piece==="wall"||part.piece==="door"){if(part.rotation%2)Object.assign(f.p,{x:part.x,y:part.y+(part.y<1750?-90:90)});else Object.assign(f.p,{x:part.x+(part.x<950?-90:90),y:part.y});}f.p.facing=Math.atan2(part.y-f.p.y,part.x-f.p.x);const v=f.command({kind:"build",...part});assert.match(v.frontier!.message,/raised/,`${part.piece} at ${part.x},${part.y}`);}
+ let v=f.w.snapshot(f.s.id,f.s.token);assert.ok(v.frontier!.structures.some(s=>s.kind==="roof"),"Known company architecture remains complete behind its own wall.");
+ f.w.frontier!.nodes.push({id:"inside-cabin",kind:"aether",x:950,y:1750,remaining:4,resetAt:0});assert.equal(f.w.snapshot(f.s.id,f.s.token).frontier!.nodes.some(n=>n.id==="inside-cabin"),false);f.w.frontier!.nodes.pop();
+ Object.assign(f.p,{x:950,y:1850,facing:-Math.PI/2});const door=f.w.frontier!.structures.find(s=>s.kind==="door")!;f.command({kind:"use",id:door.id});assert.equal(door.open,true);
+ v=f.command({kind:"build",piece:"bedroll",x:950,y:1750,rotation:0});assert.match(v.frontier!.message,/raised/);assert.equal(f.w.frontier!.structures.length,7);assert.equal(v.frontier!.supplies.timber,before.timber-49);assert.equal(v.frontier!.supplies.stone,before.stone-16);assert.equal(v.frontier!.supplies.herb,before.herb-4);
+ const materials={...v.frontier!.supplies};v=f.command({kind:"build",piece:"hearth",x:950,y:1750,rotation:0});assert.deepEqual(v.frontier!.supplies,materials);assert.match(v.frontier!.message,/occupied/);
+});
+
 for(const cls of ["Knight","Spellweaver","Ironbound","Rogue","Warden"] as const)test(`${cls} harvests at both accepted contacts without dropping the next strike and stays in the frontier`,()=>{
  let now=100000;const rooms=new Rooms(()=>now),session=rooms.create("Class harvest",cls,"frontier"),w=rooms.get(session.room).world,p=w.heroes.get(session.id)!;w.monsters=[];const node=w.frontier!.nodes.find(n=>n.kind==="timber")!;Object.assign(p,{x:node.x,y:node.y+50,facing:-Math.PI/2});w.input(p.id,p.token,{sequence:1,x:0,y:0,attack:true});now+=COMBAT[cls].contact-1;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,0);now++;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,5);now=100550;w.snapshot(p.id,p.token);w.input(p.id,p.token,{sequence:2,x:0,y:0,attack:true});now+=COMBAT[cls].contact;assert.equal(w.snapshot(p.id,p.token).frontier!.supplies.timber,10);now+=2000;Object.assign(p,{x:1440,y:850});w.snapshot(p.id,p.token);assert.equal(p.floor,0);
+});
+
+test("both door controls let a player close from inside a small cabin but never onto an occupied doorway",()=>{
+ for(const rotation of [0,1])for(const interact of [false,true]){
+  const f=fixture(),door={id:"cabin-door",kind:"door" as const,owner:f.p.id,party:f.p.party,x:950,y:1750,rotation,hp:240,open:true};f.w.frontier!.structures.push(door);
+  const clear=()=>Object.assign(f.p,{x:rotation?950:925,y:rotation?1725:1750,facing:rotation?Math.PI/2:0});
+  const use=()=>{f.advance(400);return f.input(interact?{interact:true}:{frontier:{kind:"use",id:door.id}});};
+  clear();use();assert.equal(door.open,false,"Standing inside the floor is clear of the actual door.");use();assert.equal(door.open,true);
+  Object.assign(f.p,{x:rotation?950:947,y:rotation?1747:1750});const v=use();assert.equal(door.open,true);assert.match(v.frontier!.message,/Step clear/);
+  clear();use();assert.equal(door.open,false);
+ }
 });

@@ -102,6 +102,7 @@ export class LivingWorld {
 
   frontier:FrontierState|null=null;
   configureFrontier(){this.frontier=new FrontierState(this.clock(),p=>buildingContains(p,0));}
+  private frontierOccupied(q:Point,rotation?:number){return [...this.heroes.values()].some(h=>h.floor===0&&h.hp>0&&(rotation===undefined?distance(h,q)<30:rotation%2?Math.abs(h.y-q.y)<18&&Math.abs(h.x-q.x)<29:Math.abs(h.x-q.x)<18&&Math.abs(h.y-q.y)<29));}
   watch:Watch|null=null;
   private callouts:{caller:string;at:number;coveredBy?:string}[]=[];
   private warningCooldown=new Map<string,number>();
@@ -260,14 +261,14 @@ export class LivingWorld {
       p.dodgeUntil=this.clock()+360;p.nextDodge=this.clock()+2200;
     }
 
-    if(frontierCommand&&this.frontier){try{this.frontier.command(p,frontierCommand,this.clock(),q=>this.visible(p,q)&&faces(p,q),q=>buildingContains(q,35)||trunkBlocked(q.x,q.y,35),q=>[...this.heroes.values()].some(h=>h.floor===0&&h.hp>0&&distance(h,q)<30));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"That craft could not be completed.",this.clock());}}
+    if(frontierCommand&&this.frontier){try{this.frontier.command(p,frontierCommand,this.clock(),q=>(frontierCommand.kind==="build"&&frontierCommand.piece==="roof"?canSee(p,q):this.visible(p,q))&&faces(p,q),q=>buildingContains(q,35)||trunkBlocked(q.x,q.y,35),(q,rotation)=>this.frontierOccupied(q,rotation));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"That craft could not be completed.",this.clock());}}
     if(input.service)this.service(p,input);
     if (input.skill) this.attack(p, true);
     if (input.attack && !p.action) this.attack(p, false);
 
     if(input.interact&&this.frontier&&!p.floor){
       const door=this.frontier.structures.find(s=>s.kind==="door"&&distance(p,s)<85&&this.visible(p,s)&&faces(p,s));
-      if(door){try{this.frontier.command(p,{kind:"use",id:door.id},this.clock(),q=>canSee(p,q)&&faces(p,q),q=>buildingContains(q),q=>[...this.heroes.values()].some(h=>h.floor===0&&h.hp>0&&distance(h,q)<30));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"Step clear first.",this.clock());}}
+      if(door){try{this.frontier.command(p,{kind:"use",id:door.id},this.clock(),q=>canSee(p,q)&&faces(p,q),q=>buildingContains(q),(q,rotation)=>this.frontierOccupied(q,rotation));}catch(error){this.frontier.notice(p.id,error instanceof Error?error.message:"Step clear first.",this.clock());}}
       else if(Math.abs(p.x-riverCenter(p.y))<75)this.frontier.drink(p,this.clock());
       else if(!p.action)this.attack(p,false);
     }else if (input.interact) this.portal(p);
@@ -725,7 +726,7 @@ export class LivingWorld {
 
   private visible(p:PrivateHero,q:Point){return canSee(p,q)&&(!this.frontier||p.floor>0||this.frontier.lineClear(p,q));}
   private view(p:PrivateHero):WorldView {return {
-    ...(this.frontier&&!p.floor?{frontier:this.frontier.view(p,this.clock(),q=>this.visible(p,q))}:{}),
+    ...(this.frontier&&!p.floor?{frontier:this.frontier.view(p,this.clock(),q=>this.visible(p,q),q=>distance(p,q)<sight(p.awareness).range)}:{}),
 
 
     company:p.party?[...this.heroes.values()].filter(q=>q.party===p.party).map(q=>({id:q.id,name:q.name,heroClass:q.heroClass,online:this.clock()-q.lastSeen<15000})):[],

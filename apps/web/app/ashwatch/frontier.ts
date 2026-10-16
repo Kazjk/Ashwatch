@@ -20,6 +20,15 @@ const rnd=(i:number)=>{const n=Math.sin(i*91.7+13.2)*43758.5453;return n-Math.fl
 const kinds:Material[]=["timber","stone","herb","aether"];
 const pieces:StructureKind[]=["hearth","foundation","wall","door","roof","bedroll","ward"];
 export function buildPoint(hero:{x:number;y:number;facing:number},piece:StructureKind){const grid=piece==="wall"||piece==="door"?25:50;return {x:Math.round((hero.x+Math.cos(hero.facing)*95)/grid)*grid,y:Math.round((hero.y+Math.sin(hero.facing)*95)/grid)*grid};}
+type Footprint={kind:StructureKind;x:number;y:number;rotation:number};
+const wallPiece=(s:Footprint)=>s.kind==="wall"||s.kind==="door";
+function pieceOverlap(a:Footprint,b:Footprint){
+ if(a.kind==="roof"||b.kind==="roof"||a.kind==="foundation"||b.kind==="foundation")return false;
+ const dx=Math.abs(a.x-b.x),dy=Math.abs(a.y-b.y);
+ if(wallPiece(a)&&wallPiece(b)&&a.rotation%2!==b.rotation%2&&dx>=25&&dy>=25)return false;
+ const half=(s:Footprint)=>{const size=wallPiece(s)?{x:2.7,y:25}:s.kind==="bedroll"?{x:11,y:22}:s.kind==="hearth"?{x:15,y:15}:{x:13,y:13};return s.rotation%2?{x:size.y,y:size.x}:size;};
+ const aa=half(a),bb=half(b);return dx<aa.x+bb.x-.25&&dy<aa.y+bb.y-.25;
+}
 export function validateFrontierCommand(value:unknown):FrontierCommand{
  if(!value||typeof value!=="object"||Array.isArray(value))throw Error("INVALID_FRONTIER_COMMAND");const v=value as Record<string,unknown>;
  if(v.kind==="craft"&&(v.recipe==="hatchet"||v.recipe==="meal"))return {kind:"craft",recipe:v.recipe};
@@ -52,24 +61,23 @@ export class FrontierState{
   const amount=Math.min(node.remaining,node.kind==="aether"?1:node.kind==="herb"?2:p.hatchet?10:5,200-p.supplies[node.kind]);if(amount<=0){this.say(h.id,"Your satchel is full of this material.",now);return null;}
   node.remaining-=amount;node.resetAt=node.remaining?0:now+180000;p.supplies[node.kind]+=amount;p.lastGather=now;this.say(h.id,`+${amount} ${node.kind}`,now);return node;
  }
- command(h:FrontierHero,command:FrontierCommand,now:number,visible:(p:{x:number;y:number})=>boolean,blocked:(p:{x:number;y:number})=>boolean,occupied:(p:{x:number;y:number})=>boolean){
+ command(h:FrontierHero,command:FrontierCommand,now:number,visible:(p:{x:number;y:number})=>boolean,blocked:(p:{x:number;y:number})=>boolean,occupied:(p:{x:number;y:number},doorRotation?:number)=>boolean){
   if(h.floor||h.hp<=0)throw Error("Return to the frontier first.");const p=this.person(h.id);if(now-p.lastCommand<350)throw Error("Let the last craft settle.");
   if(command.kind==="craft"){
    if(command.recipe==="hatchet"&&p.hatchet)throw Error("Your stone hatchet is already equipped.");if(command.recipe==="meal"&&p.hunger>=100)throw Error("You are already well fed.");this.pay(h,RECIPES[command.recipe].cost);
    if(command.recipe==="hatchet"){p.hatchet=true;if(!p.milestones.includes("hatchet"))p.milestones.push("hatchet");}else p.hunger=Math.min(100,p.hunger+40);this.say(h.id,command.recipe==="hatchet"?"Stone hatchet equipped · larger harvests.":"Foraged meal eaten · hunger restored.",now);
   }else if(command.kind==="use"){
    const s=this.structures.find(s=>s.id===command.id);if(!s||dist(h,s)>85||!visible(s))throw Error("Face your structure and move closer.");if(!this.friendly(h,s))throw Error("This belongs to another company.");
-   if(s.kind!=="door")throw Error("This structure works while you stay nearby.");if(s.open&&occupied(s))throw Error("Step clear before closing the door.");s.open=!s.open;this.say(h.id,s.open?"Door opened.":"Door closed.",now);
+   if(s.kind!=="door")throw Error("This structure works while you stay nearby.");if(s.open&&occupied(s,s.rotation))throw Error("Step clear before closing the door.");s.open=!s.open;this.say(h.id,s.open?"Door opened.":"Door closed.",now);
   }else{
    const grid=command.piece==="wall"||command.piece==="door"?25:50;const point={x:Math.round(command.x/grid)*grid,y:Math.round(command.y/grid)*grid};
    if(inRiver(point.x,point.y)||Math.max(...[-25,25].flatMap(dx=>[-25,25].map(dy=>terrainHeight(point.x+dx,point.y+dy))))-Math.min(...[-25,25].flatMap(dx=>[-25,25].map(dy=>terrainHeight(point.x+dx,point.y+dy))))>.65)throw Error("Find dry, gently sloping ground for your shelter.");
    if(command.piece==="roof"&&!this.structures.some(s=>s.kind==="foundation"&&dist(s,point)<8&&this.friendly(h,s)))throw Error("A roof needs your timber floor beneath it.");
-   if(point.x<80||point.y<80||point.x>2320||point.y>2320||dist(h,point)>145||!visible(point)||blocked(point)||occupied(point))throw Error("Choose clear ground within reach and in front of you.");
+   if(point.x<80||point.y<80||point.x>2320||point.y>2320||dist(h,point)>145||!visible(point)||blocked(point)||command.piece!=="roof"&&occupied(point))throw Error("Choose clear ground within reach and in front of you.");
    if(this.structures.length>=96||this.structures.filter(s=>s.owner===h.id).length>=24)throw Error("This company has reached its building limit.");
-   const same=this.structures.filter(s=>dist(s,point)<8);
-   if(same.some(s=>s.kind===command.piece||s.kind!=="foundation"&&s.kind!=="roof"&&command.piece!=="foundation"&&command.piece!=="roof"))throw Error("That place is occupied.");
+   if(this.structures.some(s=>dist(s,point)<8&&s.kind===command.piece||pieceOverlap({kind:command.piece,...point,rotation:command.rotation},s)))throw Error("That place is occupied.");
    if(this.structures.some(s=>!this.friendly(h,s)&&dist(s,point)<120))throw Error("Leave space around another company's shelter.");
-   if(this.nodes.some(n=>n.remaining>0&&dist(n,point)<30)||this.structures.some(s=>s.kind!=="foundation"&&dist(s,point)<30&&dist(s,point)>8))throw Error("Leave the resource and path clear.");
+   if(this.nodes.some(n=>n.remaining>0&&dist(n,point)<30))throw Error("Leave the resource and path clear.");
    this.pay(h,RECIPES[command.piece].cost);
    this.structures.push({id:crypto.randomUUID(),kind:command.piece,owner:h.id,party:h.party,...point,rotation:command.rotation,hp:command.piece==="wall"||command.piece==="door"?240:160,open:false});if(!p.milestones.includes(command.piece))p.milestones.push(command.piece);this.say(h.id,`${RECIPES[command.piece].name} raised.`,now);
   }
@@ -86,7 +94,7 @@ export class FrontierState{
  }
  drink(h:FrontierHero,now:number){this.person(h.id).thirst=100;this.say(h.id,"Drank from the river · thirst restored.",now);}
  respawn(h:FrontierHero){const bed=this.structures.find(s=>s.owner===h.id&&s.kind==="bedroll"&&s.hp>0);if(bed){h.x=bed.x;h.y=bed.y+35;}const p=this.person(h.id);p.hunger=Math.max(50,p.hunger);p.thirst=Math.max(50,p.thirst);p.warmth=Math.max(65,p.warmth);}
- view(h:FrontierHero,now:number,visible:(p:{x:number;y:number})=>boolean):FrontierView{const p=this.person(h.id);return {nodes:this.nodes.filter(n=>n.remaining>0&&visible(n)).map(n=>({...n})),structures:this.structures.filter(s=>s.hp>0&&visible(s)).map(s=>({...s})),supplies:{...p.supplies},hatchet:p.hatchet,milestones:[...p.milestones],hunger:p.hunger,thirst:p.thirst,warmth:p.warmth,day:frontierDay(now,this.began),message:p.message,messageAt:p.messageAt,sheltered:this.structures.some(s=>s.kind==="hearth"&&dist(h,s)<145&&this.friendly(h,s))};}
+ view(h:FrontierHero,now:number,visible:(p:{x:number;y:number})=>boolean,known=visible):FrontierView{const p=this.person(h.id);return {nodes:this.nodes.filter(n=>n.remaining>0&&visible(n)).map(n=>({...n})),structures:this.structures.filter(s=>s.hp>0&&(this.friendly(h,s)?known(s):visible(s))).map(s=>({...s})),supplies:{...p.supplies},hatchet:p.hatchet,milestones:[...p.milestones],hunger:p.hunger,thirst:p.thirst,warmth:p.warmth,day:frontierDay(now,this.began),message:p.message,messageAt:p.messageAt,sheltered:this.structures.some(s=>s.kind==="hearth"&&dist(h,s)<145&&this.friendly(h,s))};}
  checkpoint(){return {began:this.began,nodes:this.nodes.map(n=>({...n})),structures:this.structures.map(s=>({...s})),people:[...this.people].map(([id,p])=>[id,{...p,milestones:[...p.milestones],supplies:{...p.supplies}}] as const)};}
  restore(data:ReturnType<FrontierState["checkpoint"]>,delta=0){
   if(!data||!Array.isArray(data.nodes)||data.nodes.length>200||!Array.isArray(data.structures)||data.structures.length>96||!Array.isArray(data.people)||data.people.length>32)throw Error("Invalid frontier checkpoint");
